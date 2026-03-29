@@ -6,6 +6,15 @@ const api = axios.create({
   timeout: 60000,
 });
 
+// Attach auth token to every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken')?.replace(/"/g, '');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export interface ProductInfo {
   asin: string;
   product_name: string;
@@ -28,6 +37,7 @@ export interface ReviewGenerateRequest {
 }
 
 export interface ReviewGenerateResponse {
+  review_title: string;
   review_text: string;
   model_used: string;
   tokens_used?: number | null;
@@ -91,6 +101,11 @@ export const apiClient = {
 
   patchState: (partial: Record<string, unknown>) =>
     api.patch<Record<string, unknown>>('/state', partial),
+
+  checkAuth: () => api.get<{ auth_required: boolean }>('/auth/check'),
+
+  login: (password: string) =>
+    api.post<{ token: string; expires_in: number }>('/auth/login', { password }),
 };
 
 export default api;

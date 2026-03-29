@@ -17,8 +17,11 @@ def _build_prompt(request: ReviewGenerateRequest) -> list[dict]:
         "that matches the user's writing style demonstrated in the sample reviews provided. "
         "Write naturally and authentically. Do not mention that you are an AI or that this "
         "review was generated. Match the tone, vocabulary, sentence structure, and level of "
-        "detail shown in the sample reviews. Output ONLY the review text — no preamble, "
-        "no commentary, no thinking, no markdown formatting."
+        "detail shown in the sample reviews.\n\n"
+        "Output format — use these EXACT markers on their own lines:\n"
+        "TITLE: <a short, punchy review title in the same voice>\n"
+        "REVIEW:\n<the full review text>\n\n"
+        "No preamble, no commentary, no thinking, no markdown formatting."
     )
 
     # Build product context
@@ -56,7 +59,8 @@ def _build_prompt(request: ReviewGenerateRequest) -> list[dict]:
         f"{samples_text}\n\n"
         f"Write a {request.star_rating}-star review for this product. "
         f"Match the writing style of the sample reviews above. "
-        f"The review should be detailed, authentic, and between 100-300 words."
+        f"The review should be detailed, authentic, and between 100-300 words. "
+        f"Remember: output TITLE: on its own line, then REVIEW: on its own line followed by the body."
     )
 
     return [
@@ -100,19 +104,34 @@ async def generate_review(request: ReviewGenerateRequest) -> ReviewGenerateRespo
         presence_penalty=pres_penalty,
     )
 
-    review_text = response.choices[0].message.content or ""
+    raw = response.choices[0].message.content or ""
     # Strip any <think> blocks that slipped through
-    review_text = _THINK_RE.sub("", review_text)
+    raw = _THINK_RE.sub("", raw)
     # Normalize smart quotes / dashes that may arrive as mojibake
-    review_text = (
-        review_text
+    raw = (
+        raw
         .replace("\u2018", "'").replace("\u2019", "'")
         .replace("\u201c", '"').replace("\u201d", '"')
         .replace("\u2013", "-").replace("\u2014", "-")
     ).strip()
+
+    # Parse TITLE: and REVIEW: markers
+    review_title = ""
+    review_text = raw
+    title_match = re.search(r"(?i)^TITLE:\s*(.+)$", raw, re.MULTILINE)
+    review_match = re.search(r"(?i)^REVIEW:\s*", raw, re.MULTILINE)
+    if title_match:
+        review_title = title_match.group(1).strip()
+    if review_match:
+        review_text = raw[review_match.end():].strip()
+    elif title_match:
+        # No REVIEW: marker but TITLE: was found — everything after TITLE line is the review
+        review_text = raw[title_match.end():].strip()
+
     tokens_used = response.usage.total_tokens if response.usage else None
 
     return ReviewGenerateResponse(
+        review_title=review_title,
         review_text=review_text,
         model_used=model,
         tokens_used=tokens_used,

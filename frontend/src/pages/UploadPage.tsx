@@ -72,7 +72,7 @@ function UploadZone({ title, description, requiredColumns, accept, onParsed, sta
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+          className="border-2 border-dashed rounded-lg p-4 sm:p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
         >
           <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
           <p className="text-sm text-muted-foreground mb-2">
@@ -179,7 +179,7 @@ export default function UploadPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Get Started</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Get Started</h1>
         <p className="text-muted-foreground mt-1">
           Upload your sample reviews and product list to begin generating reviews.
         </p>

@@ -45,6 +45,7 @@ class ReviewGenerateRequest(BaseModel):
 
 
 class ReviewGenerateResponse(BaseModel):
+    review_title: str = ""
     review_text: str
     model_used: str
     tokens_used: Optional[int] = None

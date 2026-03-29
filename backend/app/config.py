@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     llm_frequency_penalty: float = Field(default=0.3)
     llm_presence_penalty: float = Field(default=0.1)
 
+    # Auth
+    app_password: str = Field(default="", env="APP_PASSWORD")
+
     # Server
     vps_host: str = Field(default="0.0.0.0", env="VPS_HOST")
     domain: str = Field(default="https://vine.werewolfhowl.com", env="DOMAIN")

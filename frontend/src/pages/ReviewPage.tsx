@@ -30,11 +30,13 @@ interface OutputReview {
   asin: string;
   product_name: string;
   star_rating: number;
+  review_title: string;
   review_text: string;
 }
 
 interface ProductDraft {
   starRating: number;
+  reviewTitle: string;
   reviewText: string;
   reviewHistory: string[];
   historyIndex: number;
@@ -52,6 +54,7 @@ function saveDraft(asin: string, draft: ProductDraft) {
   const drafts = loadDrafts();
   drafts[asin] = draft;
   localStorage.setItem('productDrafts', JSON.stringify(drafts));
+  window.dispatchEvent(new CustomEvent('ls-write', { detail: { key: 'productDrafts' } }));
 }
 
 export default function ReviewPage() {
@@ -62,6 +65,7 @@ export default function ReviewPage() {
   const [llmSettings] = useLocalStorage<LLMSettings>('llmSettings', {});
 
   const [starRating, setStarRating] = useState(0);
+  const [reviewTitle, setReviewTitle] = useState('');
   const [reviewText, setReviewText] = useState('');
   const [reviewHistory, setReviewHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -88,7 +92,7 @@ export default function ReviewPage() {
     // Save draft for the product we're leaving
     if (prevAsin && prevAsin !== newAsin) {
       saveDraft(prevAsin, {
-        starRating, reviewText, reviewHistory, historyIndex,
+        starRating, reviewTitle, reviewText, reviewHistory, historyIndex,
         productInfo, manualMode, manualDescription, manualRating,
       });
     }
@@ -99,6 +103,7 @@ export default function ReviewPage() {
       const draft = drafts[newAsin];
       if (draft && newAsin !== prevAsin) {
         setStarRating(draft.starRating);
+        setReviewTitle(draft.reviewTitle || '');
         setReviewText(draft.reviewText);
         setReviewHistory(draft.reviewHistory);
         setHistoryIndex(draft.historyIndex);
@@ -108,6 +113,7 @@ export default function ReviewPage() {
         setManualRating(draft.manualRating);
       } else if (!draft && newAsin !== prevAsin) {
         setStarRating(0);
+        setReviewTitle('');
         setReviewText('');
         setReviewHistory([]);
         setHistoryIndex(-1);
@@ -172,9 +178,11 @@ export default function ReviewPage() {
         llm_settings: llmSettings,
       });
       const text = res.data.review_text;
+      const title = res.data.review_title || '';
       if (reviewText) {
         setReviewHistory((prev) => [...prev, reviewText]);
       }
+      setReviewTitle(title);
       setReviewText(text);
       setHistoryIndex(-1);
       toast.success('Review generated', {
@@ -189,9 +197,10 @@ export default function ReviewPage() {
   }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, manualMode, manualDescription, manualRating]);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(reviewText);
+    const full = reviewTitle ? `${reviewTitle}\n\n${reviewText}` : reviewText;
+    navigator.clipboard.writeText(full);
     toast.success('Copied to clipboard');
-  }, [reviewText]);
+  }, [reviewTitle, reviewText]);
 
   const handleHistoryNav = useCallback((direction: 'prev' | 'next') => {
     const allVersions = [...reviewHistory, reviewText];
@@ -208,6 +217,7 @@ export default function ReviewPage() {
     const stored = JSON.parse(localStorage.getItem('sampleReviews') || '[]') as SampleReview[];
     stored.push({ star_rating: starRating, review_text: reviewText });
     localStorage.setItem('sampleReviews', JSON.stringify(stored));
+    window.dispatchEvent(new CustomEvent('ls-write', { detail: { key: 'sampleReviews' } }));
     toast.success('Added to sample reviews');
   }, [reviewText, starRating]);
 
@@ -217,6 +227,7 @@ export default function ReviewPage() {
       asin: currentProduct.asin,
       product_name: currentProduct.product_name,
       star_rating: starRating,
+      review_title: reviewTitle,
       review_text: reviewText,
     };
     setOutputReviews((prev) => [...prev, newReview]);
@@ -255,9 +266,9 @@ export default function ReviewPage() {
   return (
     <div className="space-y-6">
       {/* Product Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-lg sm:text-2xl font-bold tracking-tight leading-tight">
             {currentProduct?.product_name || 'Unknown Product'}
           </h1>
           <div className="flex items-center gap-2 mt-1">
@@ -273,43 +284,40 @@ export default function ReviewPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentIndex((i: number) => Math.max(0, i - 1))}
+              disabled={currentIndex === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentIndex((i: number) => Math.min(productList.length - 1, i + 1))}
+              disabled={currentIndex === productList.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
           <Button
             variant="outline"
-            size="icon"
-            onClick={() => setCurrentIndex((i: number) => Math.max(0, i - 1))}
-            disabled={currentIndex === 0}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentIndex((i: number) => Math.min(productList.length - 1, i + 1))}
-            disabled={currentIndex === productList.length - 1}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="sm:hidden"
+            size="sm"
+            className="gap-1.5"
             onClick={() => window.open(`https://www.amazon.com/dp/${currentProduct?.asin}`, '_blank')}
           >
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            className="hidden sm:inline-flex gap-2"
-            onClick={() => window.open(`https://www.amazon.com/dp/${currentProduct?.asin}`, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open in Amazon
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span className="hidden xs:inline">Open on </span>Amazon
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Left column: Product Info + Star Rating */}
         <div className="space-y-4">
           {/* Product Info */}
@@ -476,12 +484,22 @@ export default function ReviewPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div>
+                <Label htmlFor="review-title" className="text-sm font-medium">Review Title</Label>
+                <Input
+                  id="review-title"
+                  placeholder="Title will be generated with the review..."
+                  value={reviewTitle}
+                  onChange={(e) => setReviewTitle(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
               <Textarea
                 placeholder="Your review will appear here after generation..."
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
-                rows={12}
-                className="resize-y min-h-[200px]"
+                rows={8}
+                className="resize-y min-h-[150px] sm:min-h-[200px]"
               />
 
               <Separator />
