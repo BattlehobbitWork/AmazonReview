@@ -125,16 +125,15 @@ export default function ReviewPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex]);
 
-  // When allDrafts changes (e.g. server-state-loaded via useLocalStorage), hydrate editor
-  const hydratedAsinRef = useRef<string | null>(null);
+  // Auto-populate editor from synced data when editor is empty
+  // Priority: allDrafts first, then fall back to outputReviews (which reliably syncs)
   useEffect(() => {
     const asin = currentProduct?.asin;
-    if (!asin) return;
+    if (!asin || reviewText) return; // only populate if editor is empty
+
+    // Try draft first
     const draft = allDrafts[asin];
-    // Only hydrate if we haven't already for this asin, or if reviewText is empty
-    // (meaning data just arrived from server)
-    if (draft && draft.reviewText && !reviewText && hydratedAsinRef.current !== asin) {
-      hydratedAsinRef.current = asin;
+    if (draft && draft.reviewText) {
       setStarRating(draft.starRating);
       setReviewTitle(draft.reviewTitle || '');
       setReviewText(draft.reviewText);
@@ -144,9 +143,18 @@ export default function ReviewPage() {
       setManualMode(draft.manualMode);
       setManualDescription(draft.manualDescription || '');
       setManualRating(draft.manualRating || '');
+      return;
+    }
+
+    // Fall back to outputReviews (this always syncs reliably)
+    const output = outputReviews.find((r) => r.asin === asin);
+    if (output) {
+      setStarRating(output.star_rating);
+      setReviewTitle(output.review_title || '');
+      setReviewText(output.review_text);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allDrafts, currentProduct?.asin]);
+  }, [allDrafts, outputReviews, currentProduct?.asin]);
 
   const handleScrape = useCallback(async () => {
     if (!currentProduct) return;
