@@ -128,6 +128,30 @@ export default function ReviewPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex]);
 
+  // Re-read draft for current product when server state arrives (cross-device sync)
+  useEffect(() => {
+    const handler = () => {
+      const asin = currentProduct?.asin;
+      if (!asin) return;
+      const drafts = loadDrafts();
+      const draft = drafts[asin];
+      if (draft) {
+        setStarRating(draft.starRating);
+        setReviewTitle(draft.reviewTitle || '');
+        setReviewText(draft.reviewText);
+        setReviewHistory(draft.reviewHistory || []);
+        setHistoryIndex(draft.historyIndex ?? -1);
+        setProductInfo(draft.productInfo);
+        setManualMode(draft.manualMode);
+        setManualDescription(draft.manualDescription || '');
+        setManualRating(draft.manualRating || '');
+      }
+    };
+    window.addEventListener('server-state-loaded', handler);
+    return () => window.removeEventListener('server-state-loaded', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProduct?.asin]);
+
   const handleScrape = useCallback(async () => {
     if (!currentProduct) return;
     setIsScraping(true);
