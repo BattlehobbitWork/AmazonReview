@@ -1,0 +1,42 @@
+# Environment & secrets
+.env
+.env.local
+.env.production
+
+# AI assistant context
+.CLAUDE
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Node / Frontend
+node_modules/
+.next/
+.nuxt/
+dist/
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
