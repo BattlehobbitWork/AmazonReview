@@ -5,6 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import ThemePicker from '@/components/ThemePicker';
 
 const navItems = [
   { path: '/', label: 'Upload', icon: Upload },
@@ -81,11 +82,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
+          <ThemePicker />
           <Button
             variant="ghost"
             size="icon"
             onClick={cycleTheme}
-            className="ml-2"
+            className="ml-1"
             aria-label={`Theme: ${theme}`}
           >
             <ThemeIcon className="h-4 w-4" />
