@@ -46,23 +46,13 @@ interface ProductDraft {
   manualRating: string;
 }
 
-function loadDrafts(): Record<string, ProductDraft> {
-  try { return JSON.parse(localStorage.getItem('productDrafts') || '{}'); } catch { return {}; }
-}
-
-function saveDraft(asin: string, draft: ProductDraft) {
-  const drafts = loadDrafts();
-  drafts[asin] = draft;
-  localStorage.setItem('productDrafts', JSON.stringify(drafts));
-  window.dispatchEvent(new CustomEvent('ls-write', { detail: { key: 'productDrafts' } }));
-}
-
 export default function ReviewPage() {
   const [productList] = useLocalStorage<ProductItem[]>('productList', []);
   const [sampleReviews] = useLocalStorage<SampleReview[]>('sampleReviews', []);
   const [currentIndex, setCurrentIndex] = useLocalStorage<number>('currentProductIndex', 0);
   const [outputReviews, setOutputReviews] = useLocalStorage<OutputReview[]>('outputReviews', []);
   const [llmSettings] = useLocalStorage<LLMSettings>('llmSettings', {});
+  const [allDrafts, setAllDrafts] = useLocalStorage<Record<string, ProductDraft>>('productDrafts', {});
 
   const [starRating, setStarRating] = useState(0);
   const [reviewTitle, setReviewTitle] = useState('');
@@ -79,39 +69,46 @@ export default function ReviewPage() {
   const currentProduct = productList[currentIndex] || null;
   const prevAsinRef = useRef<string | null>(currentProduct?.asin ?? null);
 
+  // Helper to persist draft for a given ASIN
+  const persistDraft = useCallback((asin: string, draft: ProductDraft) => {
+    setAllDrafts((prev) => ({ ...prev, [asin]: draft }));
+  }, [setAllDrafts]);
+
+  // Build a draft object from current editor state
+  const currentDraftSnapshot = useCallback((): ProductDraft => ({
+    starRating, reviewTitle, reviewText, reviewHistory, historyIndex,
+    productInfo, manualMode, manualDescription, manualRating,
+  }), [starRating, reviewTitle, reviewText, reviewHistory, historyIndex, productInfo, manualMode, manualDescription, manualRating]);
+
   // Check if current product is already in output
   const isReviewed = currentProduct
     ? outputReviews.some((r) => r.asin === currentProduct.asin)
     : false;
 
-  // Save draft for previous product, restore draft for new product
+  // Save draft for previous product, restore draft for new product on navigation
   useEffect(() => {
     const prevAsin = prevAsinRef.current;
     const newAsin = currentProduct?.asin ?? null;
 
     // Save draft for the product we're leaving
     if (prevAsin && prevAsin !== newAsin) {
-      saveDraft(prevAsin, {
-        starRating, reviewTitle, reviewText, reviewHistory, historyIndex,
-        productInfo, manualMode, manualDescription, manualRating,
-      });
+      persistDraft(prevAsin, currentDraftSnapshot());
     }
 
     // Restore draft for the product we're arriving at
-    if (newAsin) {
-      const drafts = loadDrafts();
-      const draft = drafts[newAsin];
-      if (draft && newAsin !== prevAsin) {
+    if (newAsin && newAsin !== prevAsin) {
+      const draft = allDrafts[newAsin];
+      if (draft) {
         setStarRating(draft.starRating);
         setReviewTitle(draft.reviewTitle || '');
         setReviewText(draft.reviewText);
-        setReviewHistory(draft.reviewHistory);
-        setHistoryIndex(draft.historyIndex);
+        setReviewHistory(draft.reviewHistory || []);
+        setHistoryIndex(draft.historyIndex ?? -1);
         setProductInfo(draft.productInfo);
         setManualMode(draft.manualMode);
-        setManualDescription(draft.manualDescription);
-        setManualRating(draft.manualRating);
-      } else if (!draft && newAsin !== prevAsin) {
+        setManualDescription(draft.manualDescription || '');
+        setManualRating(draft.manualRating || '');
+      } else {
         setStarRating(0);
         setReviewTitle('');
         setReviewText('');
@@ -128,29 +125,28 @@ export default function ReviewPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex]);
 
-  // Re-read draft for current product when server state arrives (cross-device sync)
+  // When allDrafts changes (e.g. server-state-loaded via useLocalStorage), hydrate editor
+  const hydratedAsinRef = useRef<string | null>(null);
   useEffect(() => {
-    const handler = () => {
-      const asin = currentProduct?.asin;
-      if (!asin) return;
-      const drafts = loadDrafts();
-      const draft = drafts[asin];
-      if (draft) {
-        setStarRating(draft.starRating);
-        setReviewTitle(draft.reviewTitle || '');
-        setReviewText(draft.reviewText);
-        setReviewHistory(draft.reviewHistory || []);
-        setHistoryIndex(draft.historyIndex ?? -1);
-        setProductInfo(draft.productInfo);
-        setManualMode(draft.manualMode);
-        setManualDescription(draft.manualDescription || '');
-        setManualRating(draft.manualRating || '');
-      }
-    };
-    window.addEventListener('server-state-loaded', handler);
-    return () => window.removeEventListener('server-state-loaded', handler);
+    const asin = currentProduct?.asin;
+    if (!asin) return;
+    const draft = allDrafts[asin];
+    // Only hydrate if we haven't already for this asin, or if reviewText is empty
+    // (meaning data just arrived from server)
+    if (draft && draft.reviewText && !reviewText && hydratedAsinRef.current !== asin) {
+      hydratedAsinRef.current = asin;
+      setStarRating(draft.starRating);
+      setReviewTitle(draft.reviewTitle || '');
+      setReviewText(draft.reviewText);
+      setReviewHistory(draft.reviewHistory || []);
+      setHistoryIndex(draft.historyIndex ?? -1);
+      setProductInfo(draft.productInfo);
+      setManualMode(draft.manualMode);
+      setManualDescription(draft.manualDescription || '');
+      setManualRating(draft.manualRating || '');
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProduct?.asin]);
+  }, [allDrafts, currentProduct?.asin]);
 
   const handleScrape = useCallback(async () => {
     if (!currentProduct) return;
@@ -209,6 +205,15 @@ export default function ReviewPage() {
       setReviewTitle(title);
       setReviewText(text);
       setHistoryIndex(-1);
+      // Eagerly save draft after generation
+      if (currentProduct) {
+        const newHistory = reviewText ? [...reviewHistory, reviewText] : reviewHistory;
+        persistDraft(currentProduct.asin, {
+          starRating, reviewTitle: title, reviewText: text,
+          reviewHistory: newHistory, historyIndex: -1,
+          productInfo, manualMode, manualDescription, manualRating,
+        });
+      }
       toast.success('Review generated', {
         description: `Model: ${res.data.model_used}${res.data.tokens_used ? ` | ${res.data.tokens_used} tokens` : ''}`,
       });
@@ -218,7 +223,7 @@ export default function ReviewPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, manualMode, manualDescription, manualRating]);
+  }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, reviewHistory, manualMode, manualDescription, manualRating, persistDraft]);
 
   const handleCopy = useCallback(() => {
     const full = reviewTitle ? `${reviewTitle}\n\n${reviewText}` : reviewText;
@@ -255,8 +260,12 @@ export default function ReviewPage() {
       review_text: reviewText,
     };
     setOutputReviews((prev) => [...prev, newReview]);
+    // Eagerly save draft after appending
+    if (currentProduct) {
+      persistDraft(currentProduct.asin, currentDraftSnapshot());
+    }
     toast.success('Review appended to output');
-  }, [currentProduct, reviewText, starRating, setOutputReviews]);
+  }, [currentProduct, reviewText, reviewTitle, starRating, setOutputReviews, persistDraft, currentDraftSnapshot]);
 
   const handleExportDownload = useCallback(async () => {
     try {
