@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { apiClient } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface SampleReview {
   star_rating: number;
@@ -172,6 +174,18 @@ export default function UploadPage() {
     setProductList(parsed);
     setProductsStatus('success');
     setProductsError('');
+
+    // Also register products with the backend price tracker (merge, no duplicates)
+    apiClient.trackProducts(parsed).then((res) => {
+      const { added, skipped } = res.data;
+      if (added > 0) {
+        toast.success(`Price Tracker: ${added} new products added${skipped > 0 ? `, ${skipped} already tracked` : ''}`);
+      } else if (skipped > 0) {
+        toast.info(`Price Tracker: all ${skipped} products already tracked`);
+      }
+    }).catch(() => {
+      // Silently fail — price tracking is supplementary
+    });
   }, [setProductList]);
 
   const canProceed = samplesStatus === 'success' && productsStatus === 'success';
