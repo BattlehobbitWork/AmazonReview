@@ -53,10 +53,20 @@ def _build_prompt(request: ReviewGenerateRequest) -> list[dict]:
         for i, s in enumerate(matched, 1):
             samples_text += f"\nSample {i} ({s.star_rating} stars):\n{s.review_text}\n"
 
+    additional = ""
+    if request.additional_context:
+        additional = (
+            f"\n--- REVIEWER NOTES ---\n"
+            f"The reviewer wants to mention the following about this product:\n"
+            f"{request.additional_context}\n"
+            f"Incorporate these details naturally into the review.\n"
+        )
+
     user_msg = (
         f"{product_context}\n"
         f"Star rating to give: {request.star_rating}/5\n"
-        f"{samples_text}\n\n"
+        f"{samples_text}"
+        f"{additional}\n\n"
         f"Write a {request.star_rating}-star review for this product. "
         f"Match the writing style of the sample reviews above. "
         f"The review should be detailed, authentic, and between 100-300 words. "

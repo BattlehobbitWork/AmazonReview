@@ -34,6 +34,7 @@ export interface ReviewGenerateRequest {
   product_info?: ProductInfo | null;
   sample_reviews: { star_rating: number; review_text: string }[];
   llm_settings?: LLMSettings | null;
+  additional_context?: string | null;
 }
 
 export interface ReviewGenerateResponse {

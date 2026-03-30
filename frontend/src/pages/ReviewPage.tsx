@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ExternalLink, ChevronLeft, ChevronRight, Copy, RefreshCw,
-  Plus, Download, Loader2, AlertCircle, Info, PenLine, CheckCircle2
+  Plus, Download, Loader2, AlertCircle, Info, PenLine, CheckCircle2,
+  Flag, MessageSquarePlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +45,7 @@ interface ProductDraft {
   manualMode: boolean;
   manualDescription: string;
   manualRating: string;
+  additionalContext: string;
 }
 
 export default function ReviewPage() {
@@ -53,6 +55,7 @@ export default function ReviewPage() {
   const [outputReviews, setOutputReviews] = useLocalStorage<OutputReview[]>('outputReviews', []);
   const [llmSettings] = useLocalStorage<LLMSettings>('llmSettings', {});
   const [allDrafts, setAllDrafts] = useLocalStorage<Record<string, ProductDraft>>('productDrafts', {});
+  const [flaggedProducts, setFlaggedProducts] = useLocalStorage<string[]>('flaggedProducts', []);
 
   const [starRating, setStarRating] = useState(0);
   const [reviewTitle, setReviewTitle] = useState('');
@@ -65,6 +68,9 @@ export default function ReviewPage() {
   const [manualMode, setManualMode] = useState(false);
   const [manualDescription, setManualDescription] = useState('');
   const [manualRating, setManualRating] = useState('');
+  const [additionalContext, setAdditionalContext] = useState('');
+  const [showFlagged, setShowFlagged] = useState(false);
+  const flaggedRef = useRef<HTMLDivElement>(null);
 
   const currentProduct = productList[currentIndex] || null;
   const prevAsinRef = useRef<string | null>(currentProduct?.asin ?? null);
@@ -77,8 +83,29 @@ export default function ReviewPage() {
   // Build a draft object from current editor state
   const currentDraftSnapshot = useCallback((): ProductDraft => ({
     starRating, reviewTitle, reviewText, reviewHistory, historyIndex,
-    productInfo, manualMode, manualDescription, manualRating,
-  }), [starRating, reviewTitle, reviewText, reviewHistory, historyIndex, productInfo, manualMode, manualDescription, manualRating]);
+    productInfo, manualMode, manualDescription, manualRating, additionalContext,
+  }), [starRating, reviewTitle, reviewText, reviewHistory, historyIndex, productInfo, manualMode, manualDescription, manualRating, additionalContext]);
+
+  const isFlagged = currentProduct ? flaggedProducts.includes(currentProduct.asin) : false;
+
+  const toggleFlag = useCallback(() => {
+    if (!currentProduct) return;
+    setFlaggedProducts((prev) =>
+      prev.includes(currentProduct.asin)
+        ? prev.filter((a) => a !== currentProduct.asin)
+        : [...prev, currentProduct.asin]
+    );
+  }, [currentProduct, setFlaggedProducts]);
+
+  // Close flagged panel on outside click
+  useEffect(() => {
+    if (!showFlagged) return;
+    const handler = (e: MouseEvent) => {
+      if (flaggedRef.current && !flaggedRef.current.contains(e.target as Node)) setShowFlagged(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showFlagged]);
 
   // Check if current product is already in output
   const isReviewed = currentProduct
@@ -108,6 +135,7 @@ export default function ReviewPage() {
         setManualMode(draft.manualMode);
         setManualDescription(draft.manualDescription || '');
         setManualRating(draft.manualRating || '');
+        setAdditionalContext(draft.additionalContext || '');
       } else {
         setStarRating(0);
         setReviewTitle('');
@@ -118,6 +146,7 @@ export default function ReviewPage() {
         setManualMode(false);
         setManualDescription('');
         setManualRating('');
+        setAdditionalContext('');
       }
     }
 
@@ -143,6 +172,7 @@ export default function ReviewPage() {
       setManualMode(draft.manualMode);
       setManualDescription(draft.manualDescription || '');
       setManualRating(draft.manualRating || '');
+      setAdditionalContext(draft.additionalContext || '');
       return;
     }
 
@@ -204,6 +234,7 @@ export default function ReviewPage() {
           (r) => Math.abs(r.star_rating - starRating) <= 1
         ),
         llm_settings: llmSettings,
+        additional_context: additionalContext || null,
       });
       const text = res.data.review_text;
       const title = res.data.review_title || '';
@@ -219,7 +250,7 @@ export default function ReviewPage() {
         persistDraft(currentProduct.asin, {
           starRating, reviewTitle: title, reviewText: text,
           reviewHistory: newHistory, historyIndex: -1,
-          productInfo, manualMode, manualDescription, manualRating,
+          productInfo, manualMode, manualDescription, manualRating, additionalContext,
         });
       }
       toast.success('Review generated', {
@@ -231,7 +262,7 @@ export default function ReviewPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, reviewHistory, manualMode, manualDescription, manualRating, persistDraft]);
+  }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, reviewHistory, manualMode, manualDescription, manualRating, additionalContext, persistDraft]);
 
   const handleCopy = useCallback(() => {
     const full = reviewTitle ? `${reviewTitle}\n\n${reviewText}` : reviewText;
@@ -347,6 +378,48 @@ export default function ReviewPage() {
             </Button>
           </div>
           <Button
+            variant={isFlagged ? 'default' : 'outline'}
+            size="sm"
+            className={`gap-1.5 ${isFlagged ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500' : ''}`}
+            onClick={toggleFlag}
+          >
+            <Flag className="h-3.5 w-3.5" />
+            {isFlagged ? 'Flagged' : 'Flag'}
+          </Button>
+          {flaggedProducts.length > 0 && (
+            <div className="relative" ref={flaggedRef}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setShowFlagged((v) => !v)}
+              >
+                <Flag className="h-3.5 w-3.5 text-amber-500" />
+                {flaggedProducts.length}
+              </Button>
+              {showFlagged && (
+                <div className="absolute left-0 top-full mt-1 z-50 w-64 max-h-60 overflow-y-auto rounded-lg border bg-popover p-2 shadow-md">
+                  <p className="text-xs font-medium text-muted-foreground px-1 pb-1.5">Flagged Items</p>
+                  {flaggedProducts.map((asin) => {
+                    const idx = productList.findIndex((p) => p.asin === asin);
+                    const product = productList.find((p) => p.asin === asin);
+                    if (!product || idx === -1) return null;
+                    return (
+                      <button
+                        key={asin}
+                        onClick={() => { setCurrentIndex(idx); setShowFlagged(false); }}
+                        className="flex items-start gap-2 w-full rounded-md px-2 py-1.5 text-xs text-left transition-colors hover:bg-accent"
+                      >
+                        <Flag className="h-3 w-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-2">{product.product_name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          <Button
             variant="outline"
             size="sm"
             className="gap-1.5"
@@ -454,6 +527,26 @@ export default function ReviewPage() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Additional Context */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquarePlus className="h-4 w-4" />
+                Your Notes
+              </CardTitle>
+              <CardDescription>How do you use this product? Any details the AI should know?</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                placeholder="e.g. I use this as a travel pillow for long flights, great neck support..."
+                value={additionalContext}
+                onChange={(e) => setAdditionalContext(e.target.value)}
+                rows={3}
+                className="resize-y min-h-[60px]"
+              />
             </CardContent>
           </Card>
 

@@ -42,6 +42,7 @@ class ReviewGenerateRequest(BaseModel):
     product_info: Optional[ProductInfo] = None
     sample_reviews: list[SampleReview] = []
     llm_settings: Optional[LLMSettings] = None
+    additional_context: Optional[str] = None
 
 
 class ReviewGenerateResponse(BaseModel):
