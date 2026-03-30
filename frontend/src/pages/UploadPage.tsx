@@ -18,6 +18,7 @@ interface ProductItem {
   asin: string;
   product_name: string;
   price?: number;
+  purchase_date?: string;
 }
 
 interface UploadZoneProps {
@@ -167,6 +168,10 @@ export default function UploadPage() {
     const asinKey = keys.find((k) => k.toLowerCase() === 'asin')!;
     const nameKey = keys.find((k) => k.toLowerCase() === 'product name' || k.toLowerCase() === 'product_name')!;
     const priceKey = keys.find((k) => k.toLowerCase() === 'price');
+    const dateKey = keys.find((k) => {
+      const lk = k.toLowerCase();
+      return lk === 'purchase date' || lk === 'purchase_date' || lk === 'date' || lk === 'order date' || lk === 'order_date';
+    });
     const parsed: ProductItem[] = data
       .filter((row) => row[asinKey] && row[nameKey])
       .map((row) => {
@@ -177,6 +182,9 @@ export default function UploadPage() {
         if (priceKey && row[priceKey]) {
           const pv = parseFloat(String(row[priceKey]).replace(/[$,]/g, ''));
           if (!isNaN(pv) && pv > 0) item.price = pv;
+        }
+        if (dateKey && row[dateKey]) {
+          item.purchase_date = String(row[dateKey]).trim();
         }
         return item;
       });

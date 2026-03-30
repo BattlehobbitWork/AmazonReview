@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign, TrendingDown, TrendingUp, RefreshCw, ExternalLink,
-  Loader2, BarChart3, ArrowUpDown, ChevronDown, ChevronUp
+  Loader2, BarChart3, ArrowUpDown, ChevronDown, ChevronUp, Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { apiClient } from '@/lib/api';
 import type { PriceSummaryEntry, PriceHistoryEntry } from '@/lib/api';
 import { toast } from 'sonner';
 
-type SortField = 'product_name' | 'current_price' | 'lowest_price_365d' | 'highest_price_365d' | 'check_count';
+type SortField = 'product_name' | 'current_price' | 'lowest_price_365d' | 'highest_price_365d' | 'check_count' | 'purchase_date';
 type SortDir = 'asc' | 'desc';
 
 function formatPrice(price: number | null | undefined): string {
@@ -177,10 +177,34 @@ export default function PriceTrackerPage() {
             Tracking {totalTracked} products — prices checked every 12 hours
           </p>
         </div>
-        <Button onClick={handleCheckNow} disabled={checking} className="gap-2">
-          {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Check Prices Now
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const res = await apiClient.exportPriceReport();
+                const url = URL.createObjectURL(new Blob([res.data]));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'price_tracker_report.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+                toast.success('Report downloaded');
+              } catch {
+                toast.error('Failed to download report');
+              }
+            }}
+            disabled={totalTracked === 0}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button onClick={handleCheckNow} disabled={checking} className="gap-2">
+            {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Check Prices Now
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -250,6 +274,11 @@ export default function PriceTrackerPage() {
                       </button>
                     </th>
                     <th className="text-left font-medium px-4 py-2.5 hidden sm:table-cell">ASIN</th>
+                    <th className="text-left font-medium px-4 py-2.5 hidden md:table-cell">
+                      <button className="flex items-center gap-1" onClick={() => handleSort('purchase_date')}>
+                        Purchased <SortIcon field="purchase_date" />
+                      </button>
+                    </th>
                     <th className="text-right font-medium px-4 py-2.5">
                       <button className="flex items-center gap-1 ml-auto" onClick={() => handleSort('current_price')}>
                         Current <SortIcon field="current_price" />
@@ -300,6 +329,9 @@ export default function PriceTrackerPage() {
                           <td className="px-4 py-2.5 hidden sm:table-cell">
                             <Badge variant="secondary" className="font-mono text-xs">{p.asin}</Badge>
                           </td>
+                          <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground text-xs">
+                            {p.purchase_date || '—'}
+                          </td>
                           <td className="px-4 py-2.5 text-right font-medium">
                             {formatPrice(p.current_price)}
                           </td>
@@ -332,7 +364,7 @@ export default function PriceTrackerPage() {
                         </tr>
                         {isExpanded && (
                           <tr key={`${p.asin}-detail`}>
-                            <td colSpan={8} className="px-4 py-3 bg-muted/10 border-b">
+                            <td colSpan={9} className="px-4 py-3 bg-muted/10 border-b">
                               {historyLoading === p.asin ? (
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Loader2 className="h-4 w-4 animate-spin" /> Loading history...
@@ -340,6 +372,7 @@ export default function PriceTrackerPage() {
                               ) : historyData[p.asin] && historyData[p.asin].length > 0 ? (
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                    {p.purchase_date && <span>Purchased: {p.purchase_date}</span>}
                                     <span><DollarSign className="h-3 w-3 inline" /> Added: {formatDate(p.added_at)}</span>
                                     <span>Last checked: {formatDate(p.last_checked)}</span>
                                     {p.lowest_price_date && (

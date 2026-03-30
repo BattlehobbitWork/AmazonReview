@@ -32,6 +32,7 @@ export interface PriceSummaryEntry {
   asin: string;
   product_name: string;
   added_at: string;
+  purchase_date: string | null;
   current_price: number | null;
   last_checked: string | null;
   lowest_price_365d: number | null;
@@ -152,6 +153,9 @@ export const apiClient = {
 
   untrackProduct: (asin: string) =>
     api.delete<{ message: string }>(`/prices/track/${asin}`),
+
+  exportPriceReport: () =>
+    api.get('/prices/export', { responseType: 'blob' }),
 };
 
 export default api;
