@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ExternalLink, ChevronLeft, ChevronRight, Copy, RefreshCw,
   Plus, Download, Loader2, AlertCircle, Info, PenLine, CheckCircle2,
-  Flag, MessageSquarePlus
+  Flag, MessageSquarePlus, CircleCheck, EyeOff, Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import StarRating from '@/components/StarRating';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { apiClient } from '@/lib/api';
@@ -56,6 +57,8 @@ export default function ReviewPage() {
   const [llmSettings] = useLocalStorage<LLMSettings>('llmSettings', {});
   const [allDrafts, setAllDrafts] = useLocalStorage<Record<string, ProductDraft>>('productDrafts', {});
   const [flaggedProducts, setFlaggedProducts] = useLocalStorage<string[]>('flaggedProducts', []);
+  const [completedProducts, setCompletedProducts] = useLocalStorage<string[]>('completedProducts', []);
+  const [hideCompleted, setHideCompleted] = useLocalStorage<boolean>('hideCompleted', false);
 
   const [starRating, setStarRating] = useState(0);
   const [reviewTitle, setReviewTitle] = useState('');
@@ -96,6 +99,55 @@ export default function ReviewPage() {
         : [...prev, currentProduct.asin]
     );
   }, [currentProduct, setFlaggedProducts]);
+
+  const isCompleted = currentProduct ? completedProducts.includes(currentProduct.asin) : false;
+
+  const toggleComplete = useCallback(() => {
+    if (!currentProduct) return;
+    setCompletedProducts((prev) =>
+      prev.includes(currentProduct.asin)
+        ? prev.filter((a) => a !== currentProduct.asin)
+        : [...prev, currentProduct.asin]
+    );
+  }, [currentProduct, setCompletedProducts]);
+
+  // Navigation helpers that skip completed items when hideCompleted is on
+  const navPrev = useCallback(() => {
+    if (hideCompleted) {
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        if (!completedProducts.includes(productList[i]?.asin)) {
+          setCurrentIndex(i);
+          return;
+        }
+      }
+    } else {
+      setCurrentIndex((i: number) => Math.max(0, i - 1));
+    }
+  }, [currentIndex, hideCompleted, completedProducts, productList, setCurrentIndex]);
+
+  const navNext = useCallback(() => {
+    if (hideCompleted) {
+      for (let i = currentIndex + 1; i < productList.length; i++) {
+        if (!completedProducts.includes(productList[i]?.asin)) {
+          setCurrentIndex(i);
+          return;
+        }
+      }
+    } else {
+      setCurrentIndex((i: number) => Math.min(productList.length - 1, i + 1));
+    }
+  }, [currentIndex, hideCompleted, completedProducts, productList, setCurrentIndex]);
+
+  const hasPrev = hideCompleted
+    ? productList.slice(0, currentIndex).some((p) => !completedProducts.includes(p.asin))
+    : currentIndex > 0;
+  const hasNext = hideCompleted
+    ? productList.slice(currentIndex + 1).some((p) => !completedProducts.includes(p.asin))
+    : currentIndex < productList.length - 1;
+
+  const visibleCount = hideCompleted
+    ? productList.filter((p) => !completedProducts.includes(p.asin)).length
+    : productList.length;
 
   // Close flagged panel on outside click
   useEffect(() => {
@@ -347,11 +399,20 @@ export default function ReviewPage() {
             <Badge variant="secondary">{currentProduct?.asin}</Badge>
             <span className="text-sm text-muted-foreground">
               Product {currentIndex + 1} of {productList.length}
+              {hideCompleted && visibleCount < productList.length && (
+                <span className="ml-1">({visibleCount} visible)</span>
+              )}
             </span>
             {isReviewed && (
               <Badge variant="outline" className="text-green-600 dark:text-green-400 border-green-600 dark:border-green-400 gap-1">
                 <CheckCircle2 className="h-3 w-3" />
                 Reviewed
+              </Badge>
+            )}
+            {isCompleted && (
+              <Badge variant="outline" className="text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 gap-1">
+                <CircleCheck className="h-3 w-3" />
+                Completed
               </Badge>
             )}
           </div>
@@ -362,8 +423,8 @@ export default function ReviewPage() {
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentIndex((i: number) => Math.max(0, i - 1))}
-              disabled={currentIndex === 0}
+              onClick={navPrev}
+              disabled={!hasPrev}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -371,11 +432,31 @@ export default function ReviewPage() {
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentIndex((i: number) => Math.min(productList.length - 1, i + 1))}
-              disabled={currentIndex === productList.length - 1}
+              onClick={navNext}
+              disabled={!hasNext}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
+          </div>
+          <Button
+            variant={isCompleted ? 'default' : 'outline'}
+            size="sm"
+            className={`gap-1.5 ${isCompleted ? 'bg-blue-500 hover:bg-blue-600 text-white border-blue-500' : ''}`}
+            onClick={toggleComplete}
+          >
+            <CircleCheck className="h-3.5 w-3.5" />
+            {isCompleted ? 'Completed' : 'Mark Complete'}
+          </Button>
+          <div className="flex items-center gap-1.5">
+            <Switch
+              checked={hideCompleted}
+              onCheckedChange={(v) => setHideCompleted(v)}
+              className="scale-75"
+            />
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              {hideCompleted ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              {hideCompleted ? 'Hiding' : 'Showing'} done
+            </span>
           </div>
           <Button
             variant={isFlagged ? 'default' : 'outline'}
