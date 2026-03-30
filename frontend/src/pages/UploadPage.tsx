@@ -189,7 +189,12 @@ export default function UploadPage() {
         }
         return item;
       });
-    setProductList(parsed);
+    // Merge: keep existing products not in the new CSV, then add new CSV products
+    setProductList((prev) => {
+      const newAsins = new Set(parsed.map((p) => p.asin));
+      const kept = prev.filter((p) => !newAsins.has(p.asin));
+      return [...parsed, ...kept];
+    });
     setProductsStatus('success');
     setProductsError('');
 
