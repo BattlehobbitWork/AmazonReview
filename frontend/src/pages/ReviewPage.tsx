@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ExternalLink, ChevronLeft, ChevronRight, Copy, RefreshCw,
   Plus, Download, Loader2, AlertCircle, Info, PenLine, CheckCircle2,
-  Flag, MessageSquarePlus, CircleCheck, EyeOff, Eye
+  Flag, MessageSquarePlus, CircleCheck, EyeOff, Eye, Search, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,6 +74,10 @@ export default function ReviewPage() {
   const [additionalContext, setAdditionalContext] = useState('');
   const [showFlagged, setShowFlagged] = useState(false);
   const flaggedRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const currentProduct = productList[currentIndex] || null;
   const prevAsinRef = useRef<string | null>(currentProduct?.asin ?? null);
@@ -148,6 +152,31 @@ export default function ReviewPage() {
   const visibleCount = hideCompleted
     ? productList.filter((p) => !completedProducts.includes(p.asin)).length
     : productList.length;
+
+  // Close search panel on outside click
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [searchOpen]);
+
+  const searchResults = searchQuery.trim().length >= 2
+    ? productList
+        .map((p, idx) => ({ ...p, idx }))
+        .filter((p) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            p.product_name.toLowerCase().includes(q) ||
+            p.asin.toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 15)
+    : [];
 
   // Close flagged panel on outside click
   useEffect(() => {
@@ -389,6 +418,61 @@ export default function ReviewPage() {
 
   return (
     <div className="space-y-6">
+      {/* Search Bar */}
+      <div className="relative" ref={searchRef}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            ref={searchInputRef}
+            placeholder="Search by product name or ASIN..."
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+            onFocus={() => setSearchOpen(true)}
+            className="pl-9 pr-9"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {searchOpen && searchQuery.trim().length >= 2 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-72 overflow-y-auto rounded-lg border bg-popover p-1.5 shadow-md">
+            {searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-3">No results found</p>
+            ) : (
+              searchResults.map((p) => (
+                <button
+                  key={p.asin}
+                  onClick={() => {
+                    setCurrentIndex(p.idx);
+                    setSearchQuery('');
+                    setSearchOpen(false);
+                  }}
+                  className="flex items-start gap-3 w-full rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="line-clamp-1 font-medium">{p.product_name}</span>
+                    <span className="text-xs text-muted-foreground block">{p.asin}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                    {completedProducts.includes(p.asin) && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-blue-500 border-blue-500">Done</Badge>
+                    )}
+                    {flaggedProducts.includes(p.asin) && (
+                      <Flag className="h-3 w-3 text-amber-500" />
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Product Header */}
       <div className="flex flex-col gap-3">
         <div>
