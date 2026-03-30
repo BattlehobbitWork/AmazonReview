@@ -181,7 +181,7 @@ export default function UploadPage() {
         };
         if (priceKey && row[priceKey]) {
           const pv = parseFloat(String(row[priceKey]).replace(/[$,]/g, ''));
-          if (!isNaN(pv) && pv > 0) item.price = pv;
+          if (!isNaN(pv) && pv >= 0) item.price = pv;
         }
         if (dateKey && row[dateKey]) {
           item.purchase_date = String(row[dateKey]).trim();
