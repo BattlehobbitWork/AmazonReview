@@ -17,6 +17,7 @@ interface SampleReview {
 interface ProductItem {
   asin: string;
   product_name: string;
+  price?: number;
 }
 
 interface UploadZoneProps {
@@ -165,21 +166,33 @@ export default function UploadPage() {
     }
     const asinKey = keys.find((k) => k.toLowerCase() === 'asin')!;
     const nameKey = keys.find((k) => k.toLowerCase() === 'product name' || k.toLowerCase() === 'product_name')!;
+    const priceKey = keys.find((k) => k.toLowerCase() === 'price');
     const parsed: ProductItem[] = data
       .filter((row) => row[asinKey] && row[nameKey])
-      .map((row) => ({
-        asin: String(row[asinKey]),
-        product_name: String(row[nameKey]),
-      }));
+      .map((row) => {
+        const item: ProductItem = {
+          asin: String(row[asinKey]),
+          product_name: String(row[nameKey]),
+        };
+        if (priceKey && row[priceKey]) {
+          const pv = parseFloat(String(row[priceKey]).replace(/[$,]/g, ''));
+          if (!isNaN(pv) && pv > 0) item.price = pv;
+        }
+        return item;
+      });
     setProductList(parsed);
     setProductsStatus('success');
     setProductsError('');
 
     // Also register products with the backend price tracker (merge, no duplicates)
     apiClient.trackProducts(parsed).then((res) => {
-      const { added, skipped } = res.data;
-      if (added > 0) {
-        toast.success(`Price Tracker: ${added} new products added${skipped > 0 ? `, ${skipped} already tracked` : ''}`);
+      const { added, skipped, initial_prices } = res.data;
+      let msg = '';
+      if (added > 0) msg += `${added} new products added`;
+      if (skipped > 0) msg += `${msg ? ', ' : ''}${skipped} already tracked`;
+      if (initial_prices > 0) msg += `${msg ? ', ' : ''}${initial_prices} starting prices recorded`;
+      if (added > 0 || initial_prices > 0) {
+        toast.success(`Price Tracker: ${msg}`);
       } else if (skipped > 0) {
         toast.info(`Price Tracker: all ${skipped} products already tracked`);
       }

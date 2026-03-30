@@ -48,6 +48,7 @@ export interface PriceHistoryEntry {
 export interface TrackProductsResponse {
   added: number;
   skipped: number;
+  initial_prices: number;
   total: number;
   message: string;
 }

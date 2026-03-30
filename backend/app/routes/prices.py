@@ -23,6 +23,7 @@ class TrackProductsRequest(BaseModel):
 class TrackProductsResponse(BaseModel):
     added: int
     skipped: int
+    initial_prices: int = 0
     total: int
     message: str
 
@@ -50,11 +51,15 @@ class PriceSummaryEntry(BaseModel):
 async def api_track_products(req: TrackProductsRequest):
     """Add products to price tracking. Skips duplicates."""
     result = add_products(req.products)
+    msg = f"Added {result['added']} new products, {result['skipped']} already tracked"
+    if result.get("initial_prices", 0) > 0:
+        msg += f", {result['initial_prices']} initial prices recorded"
     return TrackProductsResponse(
         added=result["added"],
         skipped=result["skipped"],
+        initial_prices=result.get("initial_prices", 0),
         total=result["total"],
-        message=f"Added {result['added']} new products, {result['skipped']} already tracked",
+        message=msg,
     )
 
 

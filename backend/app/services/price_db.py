@@ -45,9 +45,14 @@ def _get_conn() -> sqlite3.Connection:
 
 
 def add_products(products: list[dict]) -> dict:
-    """Add products to tracking. Returns counts of added vs skipped."""
+    """Add products to tracking. Returns counts of added vs skipped.
+    
+    Each product dict can optionally include a 'price' key to record
+    an initial price snapshot (e.g. the order price from the CSV).
+    """
     added = 0
     skipped = 0
+    initial_prices = 0
     now = datetime.now(timezone.utc).isoformat()
     with _lock:
         conn = _get_conn()
@@ -73,10 +78,29 @@ def add_products(products: list[dict]) -> dict:
                         (asin, name, now),
                     )
                     added += 1
+
+                # If an initial price was provided, record it (only if no history exists yet)
+                raw_price = p.get("price")
+                if raw_price is not None:
+                    try:
+                        price_val = float(str(raw_price).replace("$", "").replace(",", "").strip())
+                        if price_val > 0:
+                            has_history = conn.execute(
+                                "SELECT 1 FROM price_history WHERE asin = ? LIMIT 1", (asin,)
+                            ).fetchone()
+                            if not has_history:
+                                conn.execute(
+                                    "INSERT INTO price_history (asin, price, scraped_at, scrape_failed) VALUES (?, ?, ?, 0)",
+                                    (asin, price_val, now),
+                                )
+                                initial_prices += 1
+                    except (ValueError, TypeError):
+                        pass
+
             conn.commit()
         finally:
             conn.close()
-    return {"added": added, "skipped": skipped, "total": added + skipped}
+    return {"added": added, "skipped": skipped, "initial_prices": initial_prices, "total": added + skipped}
 
 
 def get_tracked_products(active_only: bool = True) -> list[dict]:
