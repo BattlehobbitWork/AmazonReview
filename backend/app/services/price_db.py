@@ -93,7 +93,7 @@ def add_products(products: list[dict]) -> dict:
 
                 # If an initial price was provided, record it (only if no history exists yet)
                 raw_price = p.get("price")
-                if raw_price is not None:
+                if raw_price is not None and raw_price != "":
                     try:
                         price_val = float(str(raw_price).replace("$", "").replace(",", "").strip())
                         if price_val >= 0:

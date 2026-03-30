@@ -179,8 +179,9 @@ export default function UploadPage() {
           asin: String(row[asinKey]),
           product_name: String(row[nameKey]),
         };
-        if (priceKey && row[priceKey]) {
-          const pv = parseFloat(String(row[priceKey]).replace(/[$,]/g, ''));
+        if (priceKey) {
+          const raw = String(row[priceKey] ?? '').replace(/[$,]/g, '').trim();
+          const pv = raw === '' ? 0 : parseFloat(raw);
           if (!isNaN(pv) && pv >= 0) item.price = pv;
         }
         if (dateKey && row[dateKey]) {
