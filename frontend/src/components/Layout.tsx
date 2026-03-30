@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, Upload, Star, Settings, Sun, Moon, Monitor, ClipboardCheck } from 'lucide-react';
+import { Menu, Upload, Star, Settings, Sun, Moon, Monitor, ClipboardCheck, DollarSign } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/', label: 'Upload', icon: Upload },
   { path: '/review', label: 'Review', icon: Star },
   { path: '/completed', label: 'Completed', icon: ClipboardCheck },
+  { path: '/prices', label: 'Prices', icon: DollarSign },
   { path: '/settings', label: 'Control Panel', icon: Settings },
 ];
 

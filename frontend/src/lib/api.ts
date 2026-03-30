@@ -20,11 +20,36 @@ export interface ProductInfo {
   product_name: string;
   description?: string | null;
   average_rating?: number | null;
+  price?: number | null;
   features?: string[] | null;
   positive_themes?: string[] | null;
   negative_themes?: string[] | null;
   scrape_failed: boolean;
   error_message?: string | null;
+}
+
+export interface PriceSummaryEntry {
+  asin: string;
+  product_name: string;
+  added_at: string;
+  current_price: number | null;
+  last_checked: string | null;
+  lowest_price_365d: number | null;
+  lowest_price_date: string | null;
+  highest_price_365d: number | null;
+  check_count: number;
+}
+
+export interface PriceHistoryEntry {
+  price: number | null;
+  scraped_at: string;
+}
+
+export interface TrackProductsResponse {
+  added: number;
+  skipped: number;
+  total: number;
+  message: string;
 }
 
 export interface ReviewGenerateRequest {
@@ -107,6 +132,25 @@ export const apiClient = {
 
   login: (password: string) =>
     api.post<{ token: string; expires_in: number }>('/auth/login', { password }),
+
+  // Price tracker
+  trackProducts: (products: { asin: string; product_name: string }[]) =>
+    api.post<TrackProductsResponse>('/prices/track', { products }),
+
+  getTrackedProducts: () =>
+    api.get<{ asin: string; product_name: string; added_at: string; active: number }[]>('/prices/tracked'),
+
+  getPriceSummary: () =>
+    api.get<PriceSummaryEntry[]>('/prices/summary'),
+
+  getPriceHistory: (asin: string, days: number = 365) =>
+    api.get<PriceHistoryEntry[]>(`/prices/history/${asin}`, { params: { days } }),
+
+  triggerPriceCheck: () =>
+    api.post<{ message: string }>('/prices/check-now'),
+
+  untrackProduct: (asin: string) =>
+    api.delete<{ message: string }>(`/prices/track/${asin}`),
 };
 
 export default api;

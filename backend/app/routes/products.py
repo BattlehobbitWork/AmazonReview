@@ -3,6 +3,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.models.schemas import ProductInfo, UploadResponse
 from app.services.scraper import scrape_product
 from app.services.csv_parser import parse_product_list
+from app.services.price_db import add_products
 
 router = APIRouter()
 
@@ -12,11 +13,14 @@ _product_list: list[dict] = []
 
 @router.post("/upload/products", response_model=UploadResponse)
 async def api_upload_products(file: UploadFile = File(...)):
-    """Upload and validate a product list CSV."""
+    """Upload and validate a product list CSV. Also adds products to price tracking."""
     global _product_list
     result = await parse_product_list(file)
     if result.success and result.data:
         _product_list = result.data
+        # Auto-add to price tracker (merges, never loses history)
+        track_result = add_products(result.data)
+        result.message += f" | Tracking: {track_result['added']} new, {track_result['skipped']} existing"
     return result
 
 

@@ -17,6 +17,7 @@ class ProductInfo(BaseModel):
     product_name: str
     description: Optional[str] = None
     average_rating: Optional[float] = None
+    price: Optional[float] = None
     features: Optional[list[str]] = None
     positive_themes: Optional[list[str]] = None
     negative_themes: Optional[list[str]] = None

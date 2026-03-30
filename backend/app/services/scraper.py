@@ -2,6 +2,7 @@
 
 import asyncio
 import random
+import re
 import time
 from typing import Optional
 
@@ -66,6 +67,32 @@ def _extract_product_info(html: str, asin: str) -> ProductInfo:
             except (ValueError, IndexError):
                 pass
 
+    # Price extraction
+    price: Optional[float] = None
+    price_selectors = [
+        "span.a-price .a-offscreen",
+        "#corePrice_feature_div .a-offscreen",
+        "#apex_offerDisplay_desktop .a-offscreen",
+        "#tp_price_block_total_price_ww .a-offscreen",
+        ".apexPriceToPay .a-offscreen",
+        "#priceblock_ourprice",
+        "#priceblock_dealprice",
+        "#price_inside_buybox",
+        "#newBuyBoxPrice",
+    ]
+    for sel in price_selectors:
+        el = soup.select_one(sel)
+        if el:
+            text = el.get_text(strip=True)
+            match = re.search(r"[\d,]+\.?\d*", text.replace(",", ""))
+            if match:
+                try:
+                    price = float(match.group())
+                    if price > 0:
+                        break
+                except ValueError:
+                    pass
+
     # Feature bullets
     features: list[str] = []
     bullets = soup.select("#feature-bullets .a-list-item")
@@ -99,6 +126,7 @@ def _extract_product_info(html: str, asin: str) -> ProductInfo:
         product_name=title or f"Product {asin}",
         description=description or None,
         average_rating=avg_rating,
+        price=price,
         features=features or None,
         positive_themes=positive_themes or None,
         negative_themes=negative_themes or None,

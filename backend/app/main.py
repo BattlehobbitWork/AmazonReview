@@ -1,15 +1,32 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.routes import reviews, products, settings as settings_routes, state, auth
+from app.routes import prices as prices_routes
 from app.routes.auth import verify_token
 from app.config import settings as app_settings
+from app.services.price_scheduler import start_scheduler, stop_scheduler
+
+logging.basicConfig(level=logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background services on startup, clean up on shutdown."""
+    start_scheduler()
+    yield
+    stop_scheduler()
+
 
 app = FastAPI(
     title="Capitalism But Make It Hot",
     description="Amazon Vine Review Assistant API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -53,6 +70,7 @@ app.include_router(reviews.router, prefix="/api", tags=["reviews"])
 app.include_router(products.router, prefix="/api", tags=["products"])
 app.include_router(settings_routes.router, prefix="/api", tags=["settings"])
 app.include_router(state.router, prefix="/api", tags=["state"])
+app.include_router(prices_routes.router, prefix="/api", tags=["prices"])
 
 
 @app.get("/api/health")
