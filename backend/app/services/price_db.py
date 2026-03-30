@@ -98,7 +98,7 @@ def add_products(products: list[dict]) -> dict:
                         price_val = float(str(raw_price).replace("$", "").replace(",", "").strip())
                         if price_val >= 0:
                             has_history = conn.execute(
-                                "SELECT 1 FROM price_history WHERE asin = ? LIMIT 1", (asin,)
+                                "SELECT 1 FROM price_history WHERE asin = ? AND price IS NOT NULL LIMIT 1", (asin,)
                             ).fetchone()
                             if not has_history:
                                 conn.execute(
