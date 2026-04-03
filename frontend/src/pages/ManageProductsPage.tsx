@@ -39,8 +39,8 @@ export default function ManageProductsPage() {
 
   const reviewedAsins = useMemo(() => new Set(outputReviews.map((r) => r.asin)), [outputReviews]);
 
-  const filteredProducts = useMemo(() => {
-    let list = productList;
+  const filtered = useMemo(() => {
+    let list = [...productList];
 
     // Apply filter
     if (filterMode === 'reviewed') list = list.filter((p) => reviewedAsins.has(p.asin));
@@ -56,30 +56,30 @@ export default function ManageProductsPage() {
       );
     }
 
-    // Apply sort
-    if (sortColumn) {
-      list = [...list].sort((a, b) => {
-        let cmp = 0;
-        if (sortColumn === 'name') {
-          cmp = a.product_name.localeCompare(b.product_name);
-        } else if (sortColumn === 'asin') {
-          cmp = a.asin.localeCompare(b.asin);
-        } else if (sortColumn === 'status') {
-          const statusScore = (asin: string) => {
-            let s = 0;
-            if (completedProducts.includes(asin)) s += 4;
-            if (reviewedAsins.has(asin)) s += 2;
-            if (flaggedProducts.includes(asin)) s += 1;
-            return s;
-          };
-          cmp = statusScore(b.asin) - statusScore(a.asin);
-        }
-        return sortDir === 'desc' ? -cmp : cmp;
-      });
-    }
-
     return list;
-  }, [productList, filterMode, searchQuery, reviewedAsins, flaggedProducts, completedProducts, sortColumn, sortDir]);
+  }, [productList, filterMode, searchQuery, reviewedAsins, flaggedProducts, completedProducts]);
+
+  const filteredProducts = useMemo(() => {
+    if (!sortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortColumn === 'name') {
+        cmp = a.product_name.localeCompare(b.product_name);
+      } else if (sortColumn === 'asin') {
+        cmp = a.asin.localeCompare(b.asin);
+      } else if (sortColumn === 'status') {
+        const statusScore = (asin: string) => {
+          let s = 0;
+          if (completedProducts.includes(asin)) s += 4;
+          if (reviewedAsins.has(asin)) s += 2;
+          if (flaggedProducts.includes(asin)) s += 1;
+          return s;
+        };
+        cmp = statusScore(b.asin) - statusScore(a.asin);
+      }
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+  }, [filtered, sortColumn, sortDir, completedProducts, reviewedAsins, flaggedProducts]);
 
   const toggleSelect = (asin: string) => {
     setSelected((prev) => {
