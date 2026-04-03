@@ -10,6 +10,7 @@ import ReviewPage from '@/pages/ReviewPage';
 import ControlPanelPage from '@/pages/ControlPanelPage';
 import CompletedPage from '@/pages/CompletedPage';
 import PriceTrackerPage from '@/pages/PriceTrackerPage';
+import ManageProductsPage from '@/pages/ManageProductsPage';
 import { apiClient } from '@/lib/api';
 
 function App() {
@@ -68,6 +69,7 @@ function App() {
             <Route path="/" element={<UploadPage />} />
             <Route path="/review" element={<ReviewPage />} />
             <Route path="/completed" element={<CompletedPage />} />
+            <Route path="/manage" element={<ManageProductsPage />} />
             <Route path="/prices" element={<PriceTrackerPage />} />
             <Route path="/settings" element={<ControlPanelPage />} />
           </Routes>

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ExternalLink, ChevronLeft, ChevronRight, Copy, RefreshCw,
   Plus, Download, Loader2, AlertCircle, Info, PenLine, CheckCircle2,
-  Flag, MessageSquarePlus, CircleCheck, EyeOff, Eye, Search, X
+  Flag, MessageSquarePlus, CircleCheck, EyeOff, Eye, Search, X, Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,7 +50,7 @@ interface ProductDraft {
 }
 
 export default function ReviewPage() {
-  const [productList] = useLocalStorage<ProductItem[]>('productList', []);
+  const [productList, setProductList] = useLocalStorage<ProductItem[]>('productList', []);
   const [sampleReviews] = useLocalStorage<SampleReview[]>('sampleReviews', []);
   const [currentIndex, setCurrentIndex] = useLocalStorage<number>('currentProductIndex', 0);
   const [outputReviews, setOutputReviews] = useLocalStorage<OutputReview[]>('outputReviews', []);
@@ -114,6 +114,26 @@ export default function ReviewPage() {
         : [...prev, currentProduct.asin]
     );
   }, [currentProduct, setCompletedProducts]);
+
+  const removeProduct = useCallback(() => {
+    if (!currentProduct) return;
+    if (!window.confirm(`Remove "${currentProduct.product_name}" from the list? This cannot be undone.`)) return;
+    const asin = currentProduct.asin;
+    // Navigate away first
+    const newList = productList.filter((p) => p.asin !== asin);
+    const nextIdx = Math.min(currentIndex, newList.length - 1);
+    setProductList(newList);
+    setCurrentIndex(Math.max(0, nextIdx));
+    setOutputReviews((prev) => prev.filter((r) => r.asin !== asin));
+    setCompletedProducts((prev) => prev.filter((a) => a !== asin));
+    setFlaggedProducts((prev) => prev.filter((a) => a !== asin));
+    setAllDrafts((prev) => {
+      const copy = { ...prev };
+      delete copy[asin];
+      return copy;
+    });
+    toast.success('Product removed');
+  }, [currentProduct, currentIndex, productList, setProductList, setCurrentIndex, setOutputReviews, setCompletedProducts, setFlaggedProducts, setAllDrafts]);
 
   // Navigation helpers that skip completed items when hideCompleted is on
   const navPrev = useCallback(() => {
@@ -592,6 +612,15 @@ export default function ReviewPage() {
           >
             <ExternalLink className="h-3.5 w-3.5" />
             <span className="hidden xs:inline">Open on </span>Amazon
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            onClick={removeProduct}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove
           </Button>
         </div>
       </div>
