@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks } from 'lucide-react';
+import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,8 @@ export default function ManageProductsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'reviewed' | 'flagged' | 'completed' | 'unreviewed'>('all');
+  const [sortColumn, setSortColumn] = useState<'name' | 'asin' | 'status' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const reviewedAsins = useMemo(() => new Set(outputReviews.map((r) => r.asin)), [outputReviews]);
 
@@ -54,8 +56,30 @@ export default function ManageProductsPage() {
       );
     }
 
+    // Apply sort
+    if (sortColumn) {
+      list = [...list].sort((a, b) => {
+        let cmp = 0;
+        if (sortColumn === 'name') {
+          cmp = a.product_name.localeCompare(b.product_name);
+        } else if (sortColumn === 'asin') {
+          cmp = a.asin.localeCompare(b.asin);
+        } else if (sortColumn === 'status') {
+          const statusScore = (asin: string) => {
+            let s = 0;
+            if (completedProducts.includes(asin)) s += 4;
+            if (reviewedAsins.has(asin)) s += 2;
+            if (flaggedProducts.includes(asin)) s += 1;
+            return s;
+          };
+          cmp = statusScore(b.asin) - statusScore(a.asin);
+        }
+        return sortDir === 'desc' ? -cmp : cmp;
+      });
+    }
+
     return list;
-  }, [productList, filterMode, searchQuery, reviewedAsins, flaggedProducts, completedProducts]);
+  }, [productList, filterMode, searchQuery, reviewedAsins, flaggedProducts, completedProducts, sortColumn, sortDir]);
 
   const toggleSelect = (asin: string) => {
     setSelected((prev) => {
@@ -112,6 +136,20 @@ export default function ManageProductsPage() {
   };
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.asin));
+
+  const handleSort = (col: 'name' | 'asin' | 'status') => {
+    if (sortColumn === col) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(col);
+      setSortDir('asc');
+    }
+  };
+
+  const SortIcon = ({ col }: { col: 'name' | 'asin' | 'status' }) => {
+    if (sortColumn !== col) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
+  };
 
   if (productList.length === 0) {
     return (
@@ -199,9 +237,21 @@ export default function ManageProductsPage() {
                       aria-label="Select all"
                     />
                   </th>
-                  <th className="text-left font-medium px-4 py-2.5">Product</th>
-                  <th className="text-left font-medium px-4 py-2.5 hidden sm:table-cell">ASIN</th>
-                  <th className="text-left font-medium px-4 py-2.5">Status</th>
+                  <th className="text-left font-medium px-4 py-2.5">
+                    <button onClick={() => handleSort('name')} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                      Product <SortIcon col="name" />
+                    </button>
+                  </th>
+                  <th className="text-left font-medium px-4 py-2.5 hidden sm:table-cell">
+                    <button onClick={() => handleSort('asin')} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                      ASIN <SortIcon col="asin" />
+                    </button>
+                  </th>
+                  <th className="text-left font-medium px-4 py-2.5">
+                    <button onClick={() => handleSort('status')} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                      Status <SortIcon col="status" />
+                    </button>
+                  </th>
                   <th className="text-right font-medium px-4 py-2.5">Actions</th>
                 </tr>
               </thead>
