@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,31 +37,25 @@ export default function ManageProductsPage() {
   const [sortColumn, setSortColumn] = useState<'name' | 'asin' | 'status' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const reviewedAsins = useMemo(() => new Set(outputReviews.map((r) => r.asin)), [outputReviews]);
+  const reviewedAsins = new Set(outputReviews.map((r) => r.asin));
 
-  const filtered = useMemo(() => {
-    let list = [...productList];
+  // Filter
+  let filteredProducts = [...productList];
+  if (filterMode === 'reviewed') filteredProducts = filteredProducts.filter((p) => reviewedAsins.has(p.asin));
+  else if (filterMode === 'flagged') filteredProducts = filteredProducts.filter((p) => flaggedProducts.includes(p.asin));
+  else if (filterMode === 'completed') filteredProducts = filteredProducts.filter((p) => completedProducts.includes(p.asin));
+  else if (filterMode === 'unreviewed') filteredProducts = filteredProducts.filter((p) => !reviewedAsins.has(p.asin) && !completedProducts.includes(p.asin));
 
-    // Apply filter
-    if (filterMode === 'reviewed') list = list.filter((p) => reviewedAsins.has(p.asin));
-    else if (filterMode === 'flagged') list = list.filter((p) => flaggedProducts.includes(p.asin));
-    else if (filterMode === 'completed') list = list.filter((p) => completedProducts.includes(p.asin));
-    else if (filterMode === 'unreviewed') list = list.filter((p) => !reviewedAsins.has(p.asin) && !completedProducts.includes(p.asin));
+  if (searchQuery.trim().length >= 2) {
+    const q = searchQuery.toLowerCase();
+    filteredProducts = filteredProducts.filter((p) =>
+      p.product_name.toLowerCase().includes(q) || p.asin.toLowerCase().includes(q)
+    );
+  }
 
-    // Apply search
-    if (searchQuery.trim().length >= 2) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((p) =>
-        p.product_name.toLowerCase().includes(q) || p.asin.toLowerCase().includes(q)
-      );
-    }
-
-    return list;
-  }, [productList, filterMode, searchQuery, reviewedAsins, flaggedProducts, completedProducts]);
-
-  const filteredProducts = useMemo(() => {
-    if (!sortColumn) return filtered;
-    return [...filtered].sort((a, b) => {
+  // Sort
+  if (sortColumn) {
+    filteredProducts.sort((a, b) => {
       let cmp = 0;
       if (sortColumn === 'name') {
         cmp = a.product_name.localeCompare(b.product_name);
@@ -79,7 +73,7 @@ export default function ManageProductsPage() {
       }
       return sortDir === 'desc' ? -cmp : cmp;
     });
-  }, [filtered, sortColumn, sortDir, completedProducts, reviewedAsins, flaggedProducts]);
+  }
 
   const toggleSelect = (asin: string) => {
     setSelected((prev) => {
