@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 interface ProductItem {
   asin: string;
   product_name: string;
+  price?: number;
+  purchase_date?: string;
 }
 
 interface OutputReview {
@@ -34,7 +36,7 @@ export default function ManageProductsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'reviewed' | 'flagged' | 'completed' | 'unreviewed'>('all');
-  const [sortColumn, setSortColumn] = useState<'name' | 'asin' | 'status' | null>(null);
+  const [sortColumn, setSortColumn] = useState<'name' | 'asin' | 'status' | 'date' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const reviewedAsins = new Set(outputReviews.map((r) => r.asin));
@@ -71,6 +73,10 @@ export default function ManageProductsPage() {
         cmp = a.product_name.localeCompare(b.product_name);
       } else if (sortColumn === 'asin') {
         cmp = a.asin.localeCompare(b.asin);
+      } else if (sortColumn === 'date') {
+        const da = a.purchase_date || '';
+        const db = b.purchase_date || '';
+        cmp = da.localeCompare(db);
       } else if (sortColumn === 'status') {
         const statusScore = (asin: string) => {
           let s = 0;
@@ -141,7 +147,7 @@ export default function ManageProductsPage() {
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.asin));
 
-  const handleSort = (col: 'name' | 'asin' | 'status') => {
+  const handleSort = (col: 'name' | 'asin' | 'status' | 'date') => {
     if (sortColumn === col) {
       setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
     } else {
@@ -150,7 +156,7 @@ export default function ManageProductsPage() {
     }
   };
 
-  const SortIcon = ({ col }: { col: 'name' | 'asin' | 'status' }) => {
+  const SortIcon = ({ col }: { col: 'name' | 'asin' | 'status' | 'date' }) => {
     if (sortColumn !== col) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
     return sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
   };
@@ -251,6 +257,11 @@ export default function ManageProductsPage() {
                       ASIN <SortIcon col="asin" />
                     </button>
                   </th>
+                  <th className="text-left font-medium px-4 py-2.5 hidden md:table-cell">
+                    <button onClick={() => handleSort('date')} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                      Date <SortIcon col="date" />
+                    </button>
+                  </th>
                   <th className="text-left font-medium px-4 py-2.5">
                     <button onClick={() => handleSort('status')} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
                       Status <SortIcon col="status" />
@@ -291,6 +302,9 @@ export default function ManageProductsPage() {
                           {product.asin}
                         </Badge>
                       </td>
+                      <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground text-xs whitespace-nowrap">
+                        {product.purchase_date || '—'}
+                      </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {isReviewed && (
@@ -325,7 +339,7 @@ export default function ManageProductsPage() {
                 })}
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                       No products match your search or filter.
                     </td>
                   </tr>
