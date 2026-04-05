@@ -39,8 +39,18 @@ export default function ManageProductsPage() {
 
   const reviewedAsins = new Set(outputReviews.map((r) => r.asin));
 
+  // Deduplicate by ASIN (safety net)
+  const deduped = (() => {
+    const seen = new Set<string>();
+    return productList.filter((p) => {
+      if (seen.has(p.asin)) return false;
+      seen.add(p.asin);
+      return true;
+    });
+  })();
+
   // Filter
-  let filteredProducts = [...productList];
+  let filteredProducts = [...deduped];
   if (filterMode === 'reviewed') filteredProducts = filteredProducts.filter((p) => reviewedAsins.has(p.asin));
   else if (filterMode === 'flagged') filteredProducts = filteredProducts.filter((p) => flaggedProducts.includes(p.asin));
   else if (filterMode === 'completed') filteredProducts = filteredProducts.filter((p) => completedProducts.includes(p.asin));
@@ -162,7 +172,7 @@ export default function ManageProductsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Manage Products</h1>
           <p className="text-muted-foreground mt-1">
-            {productList.length} total products · {selected.size} selected
+            {deduped.length} total products · {selected.size} selected
           </p>
         </div>
         {selected.size > 0 && (
