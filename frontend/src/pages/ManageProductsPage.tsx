@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Loader2, Sparkles, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { apiClient } from '@/lib/api';
+import type { LLMSettings } from '@/lib/api';
 import { toast } from 'sonner';
+
+interface SampleReview {
+  star_rating: number;
+  review_text: string;
+}
 
 interface ProductItem {
   asin: string;
@@ -30,6 +37,8 @@ export default function ManageProductsPage() {
   const [completedProducts, setCompletedProducts] = useLocalStorage<string[]>('completedProducts', []);
   const [flaggedProducts, setFlaggedProducts] = useLocalStorage<string[]>('flaggedProducts', []);
   const [allDrafts, setAllDrafts] = useLocalStorage<Record<string, unknown>>('productDrafts', {});
+  const [sampleReviews] = useLocalStorage<SampleReview[]>('sampleReviews', []);
+  const [llmSettings] = useLocalStorage<LLMSettings>('llmSettings', {});
   const [, setCurrentIndex] = useLocalStorage<number>('currentProductIndex', 0);
   const navigate = useNavigate();
 
@@ -38,6 +47,12 @@ export default function ManageProductsPage() {
   const [filterMode, setFilterMode] = useState<'all' | 'reviewed' | 'flagged' | 'completed' | 'unreviewed'>('all');
   const [sortColumn, setSortColumn] = useState<'name' | 'asin' | 'status' | 'date' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  // Auto-generate state
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [autoGenProgress, setAutoGenProgress] = useState({ current: 0, total: 0, currentName: '' });
+  const [autoGenResults, setAutoGenResults] = useState({ success: 0, failed: 0 });
+  const cancelRef = useRef(false);
 
   const reviewedAsins = new Set(outputReviews.map((r) => r.asin));
 
@@ -147,6 +162,68 @@ export default function ManageProductsPage() {
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.asin));
 
+  const unreviewedProducts = deduped.filter((p) => !reviewedAsins.has(p.asin));
+
+  const handleAutoGenerate = useCallback(async () => {
+    if (unreviewedProducts.length === 0) {
+      toast.info('All products already have reviews');
+      return;
+    }
+    if (!window.confirm(`Auto-generate reviews for ${unreviewedProducts.length} unreviewed product${unreviewedProducts.length > 1 ? 's' : ''}?\n\nThis will scrape each product and generate a review using your LLM settings. Star ratings will be based on the product\'s Amazon average (or default to 4 stars).`)) return;
+
+    cancelRef.current = false;
+    setIsAutoGenerating(true);
+    setAutoGenProgress({ current: 0, total: unreviewedProducts.length, currentName: '' });
+    setAutoGenResults({ success: 0, failed: 0 });
+
+    let success = 0;
+    let failed = 0;
+
+    for (let i = 0; i < unreviewedProducts.length; i++) {
+      if (cancelRef.current) break;
+      const product = unreviewedProducts[i];
+      setAutoGenProgress({ current: i + 1, total: unreviewedProducts.length, currentName: product.product_name });
+
+      try {
+        const res = await apiClient.autoGenerateReview({
+          asin: product.asin,
+          product_name: product.product_name,
+          sample_reviews: sampleReviews,
+          llm_settings: llmSettings,
+        });
+
+        // Save to outputReviews
+        setOutputReviews((prev) => {
+          const filtered = prev.filter((r) => r.asin !== product.asin);
+          return [...filtered, {
+            asin: product.asin,
+            product_name: product.product_name,
+            star_rating: res.data.star_rating,
+            review_title: res.data.review_title,
+            review_text: res.data.review_text,
+          }];
+        });
+        success++;
+      } catch (err) {
+        console.error(`Auto-gen failed for ${product.asin}:`, err);
+        failed++;
+      }
+    }
+
+    setAutoGenResults({ success, failed });
+    setIsAutoGenerating(false);
+
+    if (cancelRef.current) {
+      toast.info(`Auto-generation cancelled. Generated ${success} review${success !== 1 ? 's' : ''}.`);
+    } else {
+      toast.success(`Done! ${success} review${success !== 1 ? 's' : ''} generated${failed > 0 ? `, ${failed} failed` : ''}.`);
+    }
+  }, [unreviewedProducts, sampleReviews, llmSettings, setOutputReviews]);
+
+  const handleCancelAutoGen = () => {
+    cancelRef.current = true;
+  };
+
   const handleSort = (col: 'name' | 'asin' | 'status' | 'date') => {
     if (sortColumn === col) {
       setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
@@ -192,6 +269,61 @@ export default function ManageProductsPage() {
           </Button>
         )}
       </div>
+
+      {/* Auto-Generate Section */}
+      <Card className="border-dashed">
+        <CardContent className="py-4 px-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="h-4 w-4 text-amber-500" />
+                <span className="font-medium text-sm">Auto-Generate Reviews</span>
+              </div>
+              {isAutoGenerating ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    {autoGenProgress.current} / {autoGenProgress.total} — {autoGenProgress.currentName.slice(0, 60)}{autoGenProgress.currentName.length > 60 ? '…' : ''}
+                  </p>
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all duration-500"
+                      style={{ width: `${(autoGenProgress.current / autoGenProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {unreviewedProducts.length > 0
+                    ? `${unreviewedProducts.length} product${unreviewedProducts.length !== 1 ? 's' : ''} without reviews. Scrapes product info and generates using your LLM settings.`
+                    : 'All products have reviews!'}
+                  {autoGenResults.success > 0 && !isAutoGenerating && (
+                    <span className="ml-1 text-green-600">Last run: {autoGenResults.success} generated{autoGenResults.failed > 0 ? `, ${autoGenResults.failed} failed` : ''}.</span>
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {isAutoGenerating ? (
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCancelAutoGen}>
+                  <StopCircle className="h-3.5 w-3.5" />
+                  Stop
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleAutoGenerate}
+                  disabled={unreviewedProducts.length === 0}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Generate {unreviewedProducts.length > 0 ? unreviewedProducts.length : ''} Missing
+                </Button>
+              )}
+              {isAutoGenerating && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground self-center" />}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Search + Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

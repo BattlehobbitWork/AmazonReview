@@ -71,6 +71,25 @@ export interface ReviewGenerateResponse {
   tokens_used?: number | null;
 }
 
+export interface AutoGenerateRequest {
+  asin: string;
+  product_name: string;
+  star_rating?: number | null;
+  sample_reviews: { star_rating: number; review_text: string }[];
+  llm_settings?: LLMSettings | null;
+}
+
+export interface AutoGenerateResponse {
+  asin: string;
+  product_name: string;
+  star_rating: number;
+  review_title: string;
+  review_text: string;
+  model_used: string;
+  tokens_used?: number | null;
+  scrape_failed: boolean;
+}
+
 export interface LLMSettings {
   api_key?: string | null;
   api_url?: string | null;
@@ -116,6 +135,9 @@ export const apiClient = {
 
   generateReview: (data: ReviewGenerateRequest) =>
     api.post<ReviewGenerateResponse>('/reviews/generate', data),
+
+  autoGenerateReview: (data: AutoGenerateRequest) =>
+    api.post<AutoGenerateResponse>('/reviews/generate-auto', data, { timeout: 120000 }),
 
   exportReviews: (reviews: Record<string, unknown>[], format: string = 'csv') =>
     api.post('/reviews/export', { reviews, format }, { responseType: 'blob' }),

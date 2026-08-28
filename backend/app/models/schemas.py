@@ -53,6 +53,25 @@ class ReviewGenerateResponse(BaseModel):
     tokens_used: Optional[int] = None
 
 
+class AutoGenerateRequest(BaseModel):
+    asin: str
+    product_name: str
+    star_rating: Optional[int] = Field(None, ge=1, le=5)
+    sample_reviews: list[SampleReview] = []
+    llm_settings: Optional[LLMSettings] = None
+
+
+class AutoGenerateResponse(BaseModel):
+    asin: str
+    product_name: str
+    star_rating: int
+    review_title: str = ""
+    review_text: str
+    model_used: str
+    tokens_used: Optional[int] = None
+    scrape_failed: bool = False
+
+
 class ExportRequest(BaseModel):
     reviews: list[dict]
     format: str = Field(default="csv", pattern="^(csv|txt)$")

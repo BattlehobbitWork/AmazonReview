@@ -1,13 +1,24 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
-import { Upload, FileText, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, ArrowRight, Sparkles, Loader2, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { apiClient } from '@/lib/api';
+import type { LLMSettings } from '@/lib/api';
 import { toast } from 'sonner';
+
+interface OutputReview {
+  asin: string;
+  product_name: string;
+  star_rating: number;
+  review_title: string;
+  review_text: string;
+}
 
 interface SampleReview {
   star_rating: number;
@@ -126,6 +137,12 @@ export default function UploadPage() {
   );
   const [samplesError, setSamplesError] = useState('');
   const [productsError, setProductsError] = useState('');
+  const [outputReviews, setOutputReviews] = useLocalStorage<OutputReview[]>('outputReviews', []);
+  const [llmSettings] = useLocalStorage<LLMSettings>('llmSettings', {});
+  const [autoGenEnabled, setAutoGenEnabled] = useLocalStorage<boolean>('autoGenOnUpload', false);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [autoGenProgress, setAutoGenProgress] = useState({ current: 0, total: 0, currentName: '' });
+  const cancelRef = useRef(false);
 
   const handleSamplesParsed = useCallback((data: Record<string, unknown>[]) => {
     if (data.length === 0) {
@@ -198,6 +215,15 @@ export default function UploadPage() {
     setProductsStatus('success');
     setProductsError('');
 
+    // Auto-generate reviews for new products if enabled
+    if (autoGenEnabled && sampleReviews.length > 0) {
+      const existingReviewAsins = new Set(outputReviews.map((r) => r.asin));
+      const newProducts = parsed.filter((p) => !existingReviewAsins.has(p.asin));
+      if (newProducts.length > 0) {
+        runAutoGenerate(newProducts);
+      }
+    }
+
     // Also register products with the backend price tracker (merge, no duplicates)
     apiClient.trackProducts(parsed).then((res) => {
       const { added, skipped, initial_prices } = res.data;
@@ -214,6 +240,50 @@ export default function UploadPage() {
       // Silently fail — price tracking is supplementary
     });
   }, [setProductList]);
+
+  const runAutoGenerate = useCallback(async (products: ProductItem[]) => {
+    cancelRef.current = false;
+    setIsAutoGenerating(true);
+    setAutoGenProgress({ current: 0, total: products.length, currentName: '' });
+    let success = 0;
+    let failed = 0;
+
+    for (let i = 0; i < products.length; i++) {
+      if (cancelRef.current) break;
+      const product = products[i];
+      setAutoGenProgress({ current: i + 1, total: products.length, currentName: product.product_name });
+
+      try {
+        const res = await apiClient.autoGenerateReview({
+          asin: product.asin,
+          product_name: product.product_name,
+          sample_reviews: sampleReviews,
+          llm_settings: llmSettings,
+        });
+        setOutputReviews((prev) => {
+          const filtered = prev.filter((r) => r.asin !== product.asin);
+          return [...filtered, {
+            asin: product.asin,
+            product_name: product.product_name,
+            star_rating: res.data.star_rating,
+            review_title: res.data.review_title,
+            review_text: res.data.review_text,
+          }];
+        });
+        success++;
+      } catch (err) {
+        console.error(`Auto-gen failed for ${product.asin}:`, err);
+        failed++;
+      }
+    }
+
+    setIsAutoGenerating(false);
+    if (cancelRef.current) {
+      toast.info(`Auto-generation cancelled. Generated ${success} review${success !== 1 ? 's' : ''}.`);
+    } else {
+      toast.success(`Auto-generated ${success} review${success !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}.`);
+    }
+  }, [sampleReviews, llmSettings, setOutputReviews]);
 
   const canProceed = samplesStatus === 'success' && productsStatus === 'success';
 
@@ -248,6 +318,50 @@ export default function UploadPage() {
           errorMessage={productsError}
         />
       </div>
+
+      {/* Auto-Generate Toggle */}
+      <Card className="border-dashed">
+        <CardContent className="py-4 px-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={autoGenEnabled}
+                  onCheckedChange={(checked) => setAutoGenEnabled(!!checked)}
+                  id="auto-gen-toggle"
+                />
+                <Label htmlFor="auto-gen-toggle" className="flex items-center gap-2 cursor-pointer">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <span className="font-medium text-sm">Auto-generate reviews on upload</span>
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5 ml-11">
+                When enabled, new products will automatically get a review generated after upload using your LLM settings and sample reviews.
+              </p>
+            </div>
+          </div>
+          {isAutoGenerating && (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 inline animate-spin mr-1" />
+                  {autoGenProgress.current} / {autoGenProgress.total} — {autoGenProgress.currentName.slice(0, 50)}{autoGenProgress.currentName.length > 50 ? '…' : ''}
+                </p>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => { cancelRef.current = true; }}>
+                  <StopCircle className="h-3 w-3" />
+                  Stop
+                </Button>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-primary h-full rounded-full transition-all duration-500"
+                  style={{ width: `${(autoGenProgress.current / autoGenProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {canProceed && (
         <div className="flex justify-center">
