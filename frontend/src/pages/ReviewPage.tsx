@@ -26,6 +26,8 @@ interface SampleReview {
 interface ProductItem {
   asin: string;
   product_name: string;
+  price?: number;
+  purchase_date?: string;
 }
 
 interface OutputReview {
@@ -505,6 +507,9 @@ export default function ReviewPage() {
               Product {currentIndex + 1} of {productList.length}
               {hideCompleted && visibleCount < productList.length && (
                 <span className="ml-1">({visibleCount} visible)</span>
+              )}
+              {currentProduct?.purchase_date && (
+                <span className="ml-2">· {currentProduct.purchase_date}</span>
               )}
             </span>
             {isReviewed && (
