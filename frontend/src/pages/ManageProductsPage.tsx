@@ -162,7 +162,7 @@ export default function ManageProductsPage() {
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.asin));
 
-  const unreviewedProducts = deduped.filter((p) => !reviewedAsins.has(p.asin));
+  const unreviewedProducts = deduped.filter((p) => !reviewedAsins.has(p.asin) && !completedProducts.includes(p.asin));
 
   const handleAutoGenerate = useCallback(async () => {
     if (unreviewedProducts.length === 0) {

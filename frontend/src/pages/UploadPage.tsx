@@ -215,10 +215,11 @@ export default function UploadPage() {
     setProductsStatus('success');
     setProductsError('');
 
-    // Auto-generate reviews for new products if enabled
+    // Auto-generate reviews for new products if enabled (skip completed)
     if (autoGenEnabled && sampleReviews.length > 0) {
       const existingReviewAsins = new Set(outputReviews.map((r) => r.asin));
-      const newProducts = parsed.filter((p) => !existingReviewAsins.has(p.asin));
+      const completedSet = new Set(JSON.parse(localStorage.getItem('completedProducts') || '[]') as string[]);
+      const newProducts = parsed.filter((p) => !existingReviewAsins.has(p.asin) && !completedSet.has(p.asin));
       if (newProducts.length > 0) {
         runAutoGenerate(newProducts);
       }
