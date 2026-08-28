@@ -152,6 +152,18 @@ export default function ManageProductsPage() {
     setSelected(new Set());
   };
 
+  const toggleCompleted = (asin: string) => {
+    setCompletedProducts((prev) =>
+      prev.includes(asin) ? prev.filter((a) => a !== asin) : [...prev, asin]
+    );
+  };
+
+  const toggleFlagged = (asin: string) => {
+    setFlaggedProducts((prev) =>
+      prev.includes(asin) ? prev.filter((a) => a !== asin) : [...prev, asin]
+    );
+  };
+
   const handleGoToProduct = (asin: string) => {
     const idx = productList.findIndex((p) => p.asin === asin);
     if (idx !== -1) {
@@ -438,22 +450,37 @@ export default function ManageProductsPage() {
                         {product.purchase_date || '—'}
                       </td>
                       <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1 flex-wrap">
                           {isReviewed && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-600 border-green-600 gap-0.5">
                               <Star className="h-2.5 w-2.5 fill-current" />
                               {review?.star_rating}
                             </Badge>
                           )}
-                          {isCompleted && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-blue-500 border-blue-500 gap-0.5">
-                              <CheckCircle2 className="h-2.5 w-2.5" />
-                              Done
-                            </Badge>
-                          )}
-                          {isFlagged && (
-                            <Flag className="h-3 w-3 text-amber-500" />
-                          )}
+                          <button
+                            onClick={() => toggleCompleted(product.asin)}
+                            className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-[10px] font-medium transition-colors ${
+                              isCompleted
+                                ? 'text-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950'
+                                : 'text-muted-foreground border-muted-foreground/30 hover:border-blue-400 hover:text-blue-400'
+                            }`}
+                            title={isCompleted ? 'Mark incomplete' : 'Mark complete'}
+                          >
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            {isCompleted ? 'Done' : 'Complete'}
+                          </button>
+                          <button
+                            onClick={() => toggleFlagged(product.asin)}
+                            className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-[10px] font-medium transition-colors ${
+                              isFlagged
+                                ? 'text-amber-500 border-amber-500 bg-amber-50 dark:bg-amber-950'
+                                : 'text-muted-foreground border-muted-foreground/30 hover:border-amber-400 hover:text-amber-400'
+                            }`}
+                            title={isFlagged ? 'Remove flag' : 'Flag item'}
+                          >
+                            <Flag className="h-2.5 w-2.5" />
+                            {isFlagged ? 'Flagged' : 'Flag'}
+                          </button>
                         </div>
                       </td>
                       <td className="px-4 py-2.5 text-right">
