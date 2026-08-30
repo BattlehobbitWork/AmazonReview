@@ -13,17 +13,9 @@ const SYNC_KEYS = new Set([
   'flaggedProducts',
 ]);
 
-/** Measure "richness" of a value for merge decisions. */
-function dataSize(val: unknown): number {
-  if (val === undefined || val === null) return 0;
-  if (Array.isArray(val)) return val.length;
-  if (typeof val === 'object') return Object.keys(val as Record<string, unknown>).length;
-  return 1; // scalar
-}
-
 /**
  * Invisible component that:
- * 1. On mount, loads state from the server into localStorage (preferring richer data)
+ * 1. On mount, loads state from the server into localStorage (local is authoritative when present)
  * 2. Listens for localStorage writes and debounce-syncs dirty keys to the server
  */
 export default function ServerSync() {
@@ -41,21 +33,23 @@ export default function ServerSync() {
         for (const key of SYNC_KEYS) {
           const serverVal = state[key];
           let localVal: unknown = undefined;
+          const raw = localStorage.getItem(key);
           try {
-            const raw = localStorage.getItem(key);
             if (raw !== null) localVal = JSON.parse(raw);
           } catch { /* ignore */ }
 
-          // Determine which side has richer data
-          const serverSize = dataSize(serverVal);
-          const localSize = dataSize(localVal);
+          const hasLocal = raw !== null && localVal !== undefined;
+          const hasServer = serverVal !== undefined;
 
-          if (serverSize >= localSize && serverVal !== undefined) {
-            // Server wins — overwrite local
+          if (hasLocal) {
+            // Local exists — it is authoritative (user's latest session)
+            // Push to server if different
+            if (hasServer && JSON.stringify(localVal) !== JSON.stringify(serverVal)) {
+              pushBack[key] = localVal;
+            }
+          } else if (hasServer) {
+            // No local data — populate from server (fresh browser / cleared cache)
             localStorage.setItem(key, JSON.stringify(serverVal));
-          } else if (localSize > serverSize && localVal !== undefined) {
-            // Local wins — keep local, push to server
-            pushBack[key] = localVal;
           }
         }
 
