@@ -2,12 +2,22 @@ services:
   backend:
     build: ./backend
     container_name: cbmih-backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
     restart: unless-stopped
     env_file: .env
     volumes:
       - app-data:/app/data
     environment:
       - DATA_DIR=/app/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     networks:
       - internal
       - nginx-proxy
@@ -15,9 +25,14 @@ services:
   frontend:
     build: ./frontend
     container_name: cbmih-frontend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - internal
       - nginx-proxy
