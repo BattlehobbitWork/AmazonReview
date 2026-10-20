@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Loader2, Sparkles, StopCircle } from 'lucide-react';
+import { Trash2, Search, X, CheckCircle2, Flag, Star, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Loader2, Sparkles, StopCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -52,6 +52,7 @@ export default function ManageProductsPage() {
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [autoGenProgress, setAutoGenProgress] = useState({ current: 0, total: 0, currentName: '' });
   const [autoGenResults, setAutoGenResults] = useState({ success: 0, failed: 0 });
+  const [regeneratingAsin, setRegeneratingAsin] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
   const reviewedAsins = new Set(outputReviews.map((r) => r.asin));
@@ -235,6 +236,36 @@ export default function ManageProductsPage() {
   const handleCancelAutoGen = () => {
     cancelRef.current = true;
   };
+
+  const handleRegenerateRow = useCallback(async (asin: string, productName: string) => {
+    setRegeneratingAsin(asin);
+    try {
+      const res = await apiClient.autoGenerateReview({
+        asin,
+        product_name: productName,
+        sample_reviews: sampleReviews,
+        llm_settings: llmSettings,
+      });
+      setOutputReviews((prev) => {
+        const filtered = prev.filter((r) => r.asin !== asin);
+        return [...filtered, {
+          asin,
+          product_name: productName,
+          star_rating: res.data.star_rating,
+          review_title: res.data.review_title,
+          review_text: res.data.review_text,
+        }];
+      });
+      toast.success('Review generated', {
+        description: productName.slice(0, 50) + (productName.length > 50 ? '…' : ''),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate review';
+      toast.error('Generation failed', { description: msg });
+    } finally {
+      setRegeneratingAsin(null);
+    }
+  }, [sampleReviews, llmSettings, setOutputReviews]);
 
   const handleSort = (col: 'name' | 'asin' | 'status' | 'date') => {
     if (sortColumn === col) {
@@ -484,14 +515,30 @@ export default function ManageProductsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => handleGoToProduct(product.asin)}
-                        >
-                          View
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handleRegenerateRow(product.asin, product.product_name)}
+                            disabled={regeneratingAsin === product.asin || isAutoGenerating}
+                            title="Generate/Regenerate review"
+                          >
+                            {regeneratingAsin === product.asin ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => handleGoToProduct(product.asin)}
+                          >
+                            View
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

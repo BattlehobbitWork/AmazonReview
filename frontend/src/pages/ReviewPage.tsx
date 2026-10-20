@@ -310,7 +310,18 @@ export default function ReviewPage() {
   }, [currentProduct]);
 
   const handleGenerate = useCallback(async () => {
-    if (!currentProduct || starRating === 0) return;
+    if (!currentProduct) return;
+
+    // Auto-default star rating if none selected (use Amazon average rounded, or 4)
+    let effectiveStarRating = starRating;
+    if (effectiveStarRating === 0) {
+      if (productInfo?.average_rating && !productInfo.scrape_failed) {
+        effectiveStarRating = Math.max(1, Math.min(5, Math.round(productInfo.average_rating)));
+      } else {
+        effectiveStarRating = 4;
+      }
+      setStarRating(effectiveStarRating);
+    }
 
     const info: ProductInfo = manualMode
       ? {
@@ -331,10 +342,10 @@ export default function ReviewPage() {
       const res = await apiClient.generateReview({
         asin: currentProduct.asin,
         product_name: currentProduct.product_name,
-        star_rating: starRating,
+        star_rating: effectiveStarRating,
         product_info: info,
         sample_reviews: sampleReviews.filter(
-          (r) => Math.abs(r.star_rating - starRating) <= 1
+          (r) => Math.abs(r.star_rating - effectiveStarRating) <= 1
         ),
         llm_settings: llmSettings,
         additional_context: additionalContext || null,
@@ -347,11 +358,22 @@ export default function ReviewPage() {
       setReviewTitle(title);
       setReviewText(text);
       setHistoryIndex(-1);
+      // Auto-save to outputReviews (overwrite by ASIN) so the review is persisted immediately
+      setOutputReviews((prev) => {
+        const filtered = prev.filter((r) => r.asin !== currentProduct.asin);
+        return [...filtered, {
+          asin: currentProduct.asin,
+          product_name: currentProduct.product_name,
+          star_rating: effectiveStarRating,
+          review_title: title,
+          review_text: text,
+        }];
+      });
       // Eagerly save draft after generation
       if (currentProduct) {
         const newHistory = reviewText ? [...reviewHistory, reviewText] : reviewHistory;
         persistDraft(currentProduct.asin, {
-          starRating, reviewTitle: title, reviewText: text,
+          starRating: effectiveStarRating, reviewTitle: title, reviewText: text,
           reviewHistory: newHistory, historyIndex: -1,
           productInfo, manualMode, manualDescription, manualRating, additionalContext,
         });
@@ -365,7 +387,7 @@ export default function ReviewPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, reviewHistory, manualMode, manualDescription, manualRating, additionalContext, persistDraft]);
+  }, [currentProduct, starRating, productInfo, sampleReviews, llmSettings, reviewText, reviewHistory, manualMode, manualDescription, manualRating, additionalContext, persistDraft, setOutputReviews]);
 
   const handleCopy = useCallback(() => {
     const full = reviewTitle ? `${reviewTitle}\n\n${reviewText}` : reviewText;
@@ -401,7 +423,10 @@ export default function ReviewPage() {
       review_title: reviewTitle,
       review_text: reviewText,
     };
-    setOutputReviews((prev) => [...prev, newReview]);
+    setOutputReviews((prev) => {
+      const filtered = prev.filter((r) => r.asin !== currentProduct.asin);
+      return [...filtered, newReview];
+    });
     // Eagerly save draft after appending
     if (currentProduct) {
       persistDraft(currentProduct.asin, currentDraftSnapshot());
@@ -770,7 +795,7 @@ export default function ReviewPage() {
             className="w-full"
             size="lg"
             onClick={handleGenerate}
-            disabled={starRating === 0 || isGenerating}
+            disabled={isGenerating}
           >
             {isGenerating ? (
               <>
@@ -842,7 +867,7 @@ export default function ReviewPage() {
                   <Copy className="h-4 w-4 mr-1" />
                   Copy
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={starRating === 0 || isGenerating}>
+                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating}>
                   <RefreshCw className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} />
                   Regenerate
                 </Button>
