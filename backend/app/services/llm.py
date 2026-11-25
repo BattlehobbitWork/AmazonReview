@@ -12,12 +12,16 @@ _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 def _build_prompt(request: ReviewGenerateRequest) -> list[dict]:
     """Build the chat messages for review generation."""
     system_msg = (
-        "/no_think\n\n"
         "You are an expert Amazon product reviewer. Your task is to write a product review "
         "that matches the user's writing style demonstrated in the sample reviews provided. "
         "Write naturally and authentically. Do not mention that you are an AI or that this "
         "review was generated. Match the tone, vocabulary, sentence structure, and level of "
         "detail shown in the sample reviews.\n\n"
+        "FORMATTING RULES:\n"
+        "- Always put a space after punctuation (periods, commas, colons, semicolons).\n"
+        "- Do not use markdown formatting (no asterisks, no hash symbols, no bullet points).\n"
+        "- Write in natural paragraphs, not lists.\n"
+        "- Use proper capitalization at the start of sentences.\n\n"
         "Output format — use these EXACT markers on their own lines:\n"
         "TITLE: <a short, punchy review title in the same voice>\n"
         "REVIEW:\n<the full review text>\n\n"
@@ -124,6 +128,11 @@ async def generate_review(request: ReviewGenerateRequest) -> ReviewGenerateRespo
         .replace("\u201c", '"').replace("\u201d", '"')
         .replace("\u2013", "-").replace("\u2014", "-")
     ).strip()
+    # Fix missing spaces after punctuation (Qwen3 sometimes omits them)
+    # Sentence-ending punctuation followed by a capital letter
+    raw = re.sub(r'([.!?])([A-Z])', r'\1 \2', raw)
+    # Commas, semicolons, colons followed by a letter
+    raw = re.sub(r'([,;:])([a-zA-Z])', r'\1 \2', raw)
 
     # Parse TITLE: and REVIEW: markers
     review_title = ""

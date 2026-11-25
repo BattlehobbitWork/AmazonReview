@@ -40,7 +40,7 @@ export default function ControlPanelPage() {
   const [llmSettings, setLLMSettings] = useLocalStorage<LLMSettings>('llmSettings', {
     model: 'Qwen/Qwen3-32B',
     temperature: 0.75,
-    max_tokens: 1024,
+    max_tokens: 2048,
     top_p: 0.9,
     frequency_penalty: 0.3,
     presence_penalty: 0.1,
@@ -350,11 +350,11 @@ export default function ControlPanelPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Max Tokens: {llmSettings.max_tokens ?? 1024}</Label>
+                  <Label>Max Tokens: {llmSettings.max_tokens ?? 2048}</Label>
                   <Slider
-                    value={[llmSettings.max_tokens ?? 1024]}
+                    value={[llmSettings.max_tokens ?? 2048]}
                     min={64}
-                    max={4096}
+                    max={8192}
                     step={64}
                     onValueChange={(v) => handleSettingsChange('max_tokens', Array.isArray(v) ? v[0] : v)}
                     disabled={settingsLocked}
