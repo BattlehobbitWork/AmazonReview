@@ -38,7 +38,7 @@ interface OutputReview {
 
 export default function ControlPanelPage() {
   const [llmSettings, setLLMSettings] = useLocalStorage<LLMSettings>('llmSettings', {
-    model: 'Qwen/Qwen3-32B',
+    model: 'qwen/qwen3.8-27b-novelist',
     temperature: 0.9,
     max_tokens: 2048,
     top_p: 0.9,
@@ -59,7 +59,12 @@ export default function ControlPanelPage() {
 
   useEffect(() => {
     calculateUsage();
-  }, [calculateUsage]);
+    // Auto-migrate away from known-bad models
+    if (llmSettings.model === 'zai-org/glm-5' || llmSettings.model === 'Qwen/Qwen3-32B') {
+      setLLMSettings((prev) => ({ ...prev, model: 'qwen/qwen3.8-27b-novelist' }));
+      toast.info('Model updated to qwen/qwen3.8-27b-novelist (better review quality)');
+    }
+  }, [calculateUsage, llmSettings.model, setLLMSettings]);
 
   const handleSettingsChange = useCallback((key: keyof LLMSettings, value: string | number) => {
     setLLMSettings((prev) => ({ ...prev, [key]: value }));
