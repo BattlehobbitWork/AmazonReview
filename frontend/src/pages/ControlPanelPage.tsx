@@ -32,6 +32,7 @@ interface OutputReview {
   asin: string;
   product_name: string;
   star_rating: number;
+  review_title: string;
   review_text: string;
 }
 
@@ -46,6 +47,8 @@ export default function ControlPanelPage() {
   });
   const [sampleReviews, setSampleReviews] = useLocalStorage<SampleReview[]>('sampleReviews', []);
   const [outputReviews, setOutputReviews] = useLocalStorage<OutputReview[]>('outputReviews', []);
+  const [completedProducts, setCompletedProducts] = useLocalStorage<string[]>('completedProducts', []);
+  const [, setAllDrafts] = useLocalStorage<Record<string, unknown>>('productDrafts', {});
   const [outputFormat, setOutputFormat] = useLocalStorage<string>('outputFormat', 'csv');
   const [settingsLocked, setSettingsLocked] = useState(true);
   const [editingSampleIdx, setEditingSampleIdx] = useState<number | null>(null);
@@ -158,6 +161,79 @@ export default function ControlPanelPage() {
     setOutputReviews((prev) => prev.filter((_, i) => i !== idx));
     toast.success('Output review deleted');
   }, [setOutputReviews]);
+
+  // Export completed reviews only (client-side, no backend POST)
+  const completedReviews = outputReviews.filter((r) => completedProducts.includes(r.asin));
+
+  const handleExportCompleted = useCallback(() => {
+    if (completedReviews.length === 0) {
+      toast.error('No completed reviews to export');
+      return;
+    }
+    if (outputFormat === 'csv') {
+      const csv = Papa.unparse(completedReviews.map((r) => ({
+        ASIN: r.asin,
+        'Product Name': r.product_name,
+        'Star Rating': r.star_rating,
+        'Review Title': r.review_title || '',
+        'Review Text': r.review_text,
+      })));
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'completed_reviews.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const lines: string[] = [];
+      completedReviews.forEach((r, i) => {
+        lines.push(`--- Review ${i + 1} ---`);
+        lines.push(`ASIN: ${r.asin}`);
+        lines.push(`Product: ${r.product_name}`);
+        lines.push(`Stars: ${r.star_rating}`);
+        if (r.review_title) lines.push(`Title: ${r.review_title}`);
+        lines.push(`Review:\n${r.review_text}`);
+        lines.push('');
+      });
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'completed_reviews.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    toast.success(`Exported ${completedReviews.length} completed review${completedReviews.length > 1 ? 's' : ''}`);
+  }, [completedReviews, outputFormat]);
+
+  // Clear completed reviews from storage (after export)
+  const handleClearCompleted = useCallback(() => {
+    const completedSet = new Set(completedProducts);
+    setOutputReviews((prev) => prev.filter((r) => !completedSet.has(r.asin)));
+    setCompletedProducts([]);
+    // Clear drafts for completed ASINs
+    setAllDrafts((prev) => {
+      const copy = { ...prev };
+      completedProducts.forEach((asin) => delete copy[asin]);
+      return copy;
+    });
+    toast.success(`Cleared ${completedProducts.length} completed review${completedProducts.length > 1 ? 's' : ''} from storage`);
+  }, [completedProducts, setOutputReviews, setCompletedProducts, setAllDrafts]);
+
+  // Clear all drafts (frees storage without touching reviews)
+  const handleClearDrafts = useCallback(() => {
+    setAllDrafts({});
+    toast.success('All drafts cleared');
+  }, [setAllDrafts]);
+
+  // Clear non-completed reviews (so they can be regenerated fresh)
+  const handleClearNonCompleted = useCallback(() => {
+    const completedSet = new Set(completedProducts);
+    const removed = outputReviews.filter((r) => !completedSet.has(r.asin)).length;
+    setOutputReviews((prev) => prev.filter((r) => completedSet.has(r.asin)));
+    toast.success(`Cleared ${removed} non-completed review${removed !== 1 ? 's' : ''} — ready to regenerate`);
+  }, [completedProducts, outputReviews, setOutputReviews]);
 
   const handleClearAll = useCallback(() => {
     localStorage.clear();
@@ -401,9 +477,36 @@ export default function ControlPanelPage() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <CardTitle>Output Reviews</CardTitle>
-                  <CardDescription>{outputReviews.length} reviews ready for export</CardDescription>
+                  <CardDescription>
+                    {outputReviews.length} reviews · {completedReviews.length} completed · {outputReviews.length - completedReviews.length} in progress
+                  </CardDescription>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={handleExportCompleted} disabled={completedReviews.length === 0}>
+                    <Download className="h-4 w-4 mr-1" />
+                    Export Completed ({completedReviews.length})
+                  </Button>
+                  <Dialog>
+                    <DialogTrigger>
+                      <Button variant="outline" size="sm" disabled={completedProducts.length === 0}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Clear Completed
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Clear Completed Reviews?</DialogTitle>
+                        <DialogDescription>
+                          This removes {completedReviews.length} completed review{completedReviews.length > 1 ? 's' : ''} from storage to free up space.
+                          Make sure you've exported them first! Price tracking data is not affected.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose><Button variant="outline">Cancel</Button></DialogClose>
+                        <DialogClose><Button variant="destructive" onClick={handleClearCompleted}>Clear Completed</Button></DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                   <div className="flex items-center gap-2">
                     <Label htmlFor="format-toggle" className="text-sm">TXT</Label>
                     <Switch
@@ -499,14 +602,75 @@ export default function ControlPanelPage() {
 
               <Separator />
 
+              {/* Per-key storage breakdown */}
               <div className="grid gap-2 text-sm">
                 <div className="flex justify-between">
                   <span>Sample Reviews</span>
-                  <span>{sampleReviews.length} items</span>
+                  <span>{sampleReviews.length} items · {formatBytes((localStorage.getItem('sampleReviews') || '').length * 2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Output Reviews</span>
-                  <span>{outputReviews.length} items</span>
+                  <span>{outputReviews.length} items · {formatBytes((localStorage.getItem('outputReviews') || '').length * 2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Product Drafts</span>
+                  <span>{formatBytes((localStorage.getItem('productDrafts') || '').length * 2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Product List</span>
+                  <span>{formatBytes((localStorage.getItem('productList') || '').length * 2)}</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Space-saving actions */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Free Up Space</h4>
+                <div className="flex flex-wrap gap-2">
+                  <Dialog>
+                    <DialogTrigger>
+                      <Button variant="outline" size="sm">
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Clear All Drafts
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Clear All Drafts?</DialogTitle>
+                        <DialogDescription>
+                          This removes all per-product editor drafts (review history, manual entries, etc.) from storage.
+                          Your output reviews and completed reviews are NOT affected. This frees up the biggest chunk of space.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose><Button variant="outline">Cancel</Button></DialogClose>
+                        <DialogClose><Button variant="destructive" onClick={handleClearDrafts}>Clear Drafts</Button></DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  <Dialog>
+                    <DialogTrigger>
+                      <Button variant="outline" size="sm" disabled={outputReviews.length - completedReviews.length === 0}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Clear Non-Completed Reviews ({outputReviews.length - completedReviews.length})
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Clear Non-Completed Reviews?</DialogTitle>
+                        <DialogDescription>
+                          This removes {outputReviews.length - completedReviews.length} review(s) that are NOT marked as completed.
+                          You can regenerate them fresh from the Manage Products page. Completed reviews and price data are not affected.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose><Button variant="outline">Cancel</Button></DialogClose>
+                        <DialogClose><Button variant="destructive" onClick={handleClearNonCompleted}>Clear & Regenerate Later</Button></DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
 
