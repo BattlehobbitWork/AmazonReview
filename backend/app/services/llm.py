@@ -22,6 +22,12 @@ def _build_prompt(request: ReviewGenerateRequest) -> list[dict]:
         "- Do not use markdown formatting (no asterisks, no hash symbols, no bullet points).\n"
         "- Write in natural paragraphs, not lists.\n"
         "- Use proper capitalization at the start of sentences.\n\n"
+        "VARIETY RULES:\n"
+        "- Do not repeat the same phrases or sentences across reviews.\n"
+        "- Each review must be unique and specific to the product.\n"
+        "- Vary your sentence openings — do not start multiple sentences the same way.\n"
+        "- Avoid generic phrases like 'I recently purchased', 'Let me tell you', 'I have to say'.\n"
+        "- Be specific about the product's features and your experience with them.\n\n"
         "Output format — use these EXACT markers on their own lines:\n"
         "TITLE: <a short, punchy review title in the same voice>\n"
         "REVIEW:\n<the full review text>\n\n"
@@ -119,6 +125,22 @@ async def generate_review(request: ReviewGenerateRequest) -> ReviewGenerateRespo
     )
 
     raw = response.choices[0].message.content or ""
+
+    # Debug logging to diagnose quality issues
+    import logging, time
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("llm")
+    logger.info("=== REVIEW GENERATION DEBUG ===")
+    logger.info("Model: %s | max_tokens: %s | temp: %s | freq_pen: %s | pres_pen: %s",
+                model, max_tokens, temperature, freq_penalty, pres_penalty)
+    logger.info("Raw output length: %d chars", len(raw))
+    logger.info("Has <think> block: %s", "<think>" in raw)
+    if response.usage:
+        logger.info("Token usage — prompt: %d, completion: %d, total: %d",
+                    response.usage.prompt_tokens, response.usage.completion_tokens, response.usage.total_tokens)
+    # Log first 500 chars of raw for diagnosis
+    logger.info("Raw output preview (first 500 chars): %s", raw[:500])
+
     # Strip any <think> blocks that slipped through
     raw = _THINK_RE.sub("", raw)
     # Normalize smart quotes / dashes that may arrive as mojibake
@@ -133,6 +155,12 @@ async def generate_review(request: ReviewGenerateRequest) -> ReviewGenerateRespo
     raw = re.sub(r'([.!?])([A-Z])', r'\1 \2', raw)
     # Commas, semicolons, colons followed by a letter
     raw = re.sub(r'([,;:])([a-zA-Z])', r'\1 \2', raw)
+    # Period followed by lowercase letter (but not after single letters like e.g. i.e.)
+    # Only add space if preceded by a word of 2+ letters
+    raw = re.sub(r'([a-zA-Z]{2,})\.([a-z])', r'\1. \2', raw)
+
+    logger.info("Post-processed preview (first 500 chars): %s", raw[:500])
+    logger.info("=== END DEBUG ===")
 
     # Parse TITLE: and REVIEW: markers
     review_title = ""

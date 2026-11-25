@@ -39,11 +39,11 @@ interface OutputReview {
 export default function ControlPanelPage() {
   const [llmSettings, setLLMSettings] = useLocalStorage<LLMSettings>('llmSettings', {
     model: 'Qwen/Qwen3-32B',
-    temperature: 0.75,
+    temperature: 0.9,
     max_tokens: 2048,
     top_p: 0.9,
-    frequency_penalty: 0.3,
-    presence_penalty: 0.1,
+    frequency_penalty: 0.6,
+    presence_penalty: 0.3,
   });
   const [sampleReviews, setSampleReviews] = useLocalStorage<SampleReview[]>('sampleReviews', []);
   const [outputReviews, setOutputReviews] = useLocalStorage<OutputReview[]>('outputReviews', []);
